@@ -592,7 +592,7 @@ button {
   padding: 44px 32px 120px;
   font-family: var(--serif);
   font-size: 17px;
-  line-height: 1.7;
+  line-height: 1.5;
   color: var(--text);
   outline: none;
   caret-color: var(--accent);
@@ -647,7 +647,11 @@ button {
 }
 
 .layout-content li {
-  margin-bottom: 6px;
+  margin-bottom: 12px;
+}
+
+.layout-content li:last-child {
+  margin-bottom: 0;
 }
 
 .layout-content li p {
