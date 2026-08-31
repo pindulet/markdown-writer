@@ -1,0 +1,11 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1360, "h": 880, "title": "Layout view" },
+    { "file": "MarkdownView.dc.html", "x": 1460, "y": 0, "w": 1360, "h": 880, "title": "Markdown view" },
+    { "file": "ClaudeUpdate.dc.html", "x": 730, "y": 1020, "w": 1360, "h": 880, "title": "Claude har opdateret filen" }
+  ],
+  "annotations": [
+    { "id": "om-mockuppen", "x": 0, "y": -160, "w": 340, "text": "Mockup v1 — samme vindue i tre tilstande:\n1. Layout view (standard)\n2. Markdown view (switcheren øverst til højre)\n3. Øjeblikket hvor Claude har opdateret en fil" }
+  ],
+  "launch": { "view": "canvas" }
+}
