@@ -5,7 +5,8 @@ import type { FileEntry } from "../backend";
 interface MenuState {
   x: number;
   y: number;
-  path: string;
+  kind: "file" | "folder";
+  path: string; // absolut sti for filer, rel_dir for mapper
 }
 
 interface FolderNode {
@@ -134,7 +135,7 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
         onClick={() => void useStore.getState().openFile(f.path)}
         onContextMenu={(e) => {
           e.preventDefault();
-          setMenu({ x: e.clientX, y: e.clientY, path: f.path });
+          setMenu({ x: e.clientX, y: e.clientY, kind: "file", path: f.path });
         }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -154,6 +155,10 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
           className="folder-row"
           style={{ paddingLeft: 10 + depth * 14 }}
           onClick={() => toggleFolder(node.relPath)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setMenu({ x: e.clientX, y: e.clientY, kind: "folder", path: node.relPath });
+          }}
         >
           <svg
             className={"chevron" + (isCollapsed ? "" : " open")}
@@ -255,18 +260,32 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
           style={{ left: menu.x, top: menu.y }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="context-item" onClick={() => startRename(menu.path)}>
-            Omdøb
-          </div>
-          <div
-            className="context-item danger"
-            onClick={() => {
-              void useStore.getState().removeNote(menu.path);
-              setMenu(null);
-            }}
-          >
-            Læg i papirkurven
-          </div>
+          {menu.kind === "file" ? (
+            <>
+              <div className="context-item" onClick={() => startRename(menu.path)}>
+                Omdøb
+              </div>
+              <div
+                className="context-item danger"
+                onClick={() => {
+                  void useStore.getState().removeNote(menu.path);
+                  setMenu(null);
+                }}
+              >
+                Læg i papirkurven
+              </div>
+            </>
+          ) : (
+            <div
+              className="context-item"
+              onClick={() => {
+                useStore.getState().setNewNoteOpen(true, menu.path);
+                setMenu(null);
+              }}
+            >
+              Ny note her
+            </div>
+          )}
         </div>
       )}
     </div>

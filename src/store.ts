@@ -26,6 +26,7 @@ interface Store {
   sidebarVisible: boolean;
   changedFiles: Record<string, true>;
   newNoteOpen: boolean;
+  newNoteDir: string; // forvalgt undermappe (rel_dir), "" = rodmappen
   shortcutsOpen: boolean;
 
   init: () => Promise<void>;
@@ -44,9 +45,9 @@ interface Store {
   setView: (view: ViewMode) => void;
   toggleView: () => void;
   toggleSidebar: () => void;
-  setNewNoteOpen: (open: boolean) => void;
+  setNewNoteOpen: (open: boolean, dir?: string) => void;
   setShortcutsOpen: (open: boolean) => void;
-  newNote: (name: string) => Promise<void>;
+  newNote: (name: string, relDir: string) => Promise<void>;
   renameNote: (path: string, newName: string) => Promise<void>;
   removeNote: (path: string) => Promise<void>;
 }
@@ -95,6 +96,7 @@ export const useStore = create<Store>((set, get) => ({
   sidebarVisible: true,
   changedFiles: {},
   newNoteOpen: false,
+  newNoteDir: "",
   shortcutsOpen: false,
 
   init: async () => {
@@ -400,15 +402,17 @@ export const useStore = create<Store>((set, get) => ({
 
   toggleSidebar: () => set({ sidebarVisible: !get().sidebarVisible }),
 
-  setNewNoteOpen: (open: boolean) => set({ newNoteOpen: open }),
+  setNewNoteOpen: (open: boolean, dir?: string) =>
+    set({ newNoteOpen: open, newNoteDir: dir ?? "" }),
 
   setShortcutsOpen: (open: boolean) => set({ shortcutsOpen: open }),
 
-  newNote: async (name: string) => {
+  newNote: async (name: string, relDir: string) => {
     const { folder } = get();
     if (!folder) return;
     const title = name.trim() || "Uden titel";
-    const path = await fsApi.createFile(folder, title);
+    const dir = relDir ? `${folder}/${relDir}` : folder;
+    const path = await fsApi.createFile(dir, title);
     await get().refreshFiles();
     await get().openFile(path);
   },

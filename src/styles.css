@@ -844,6 +844,17 @@ button {
   border-color: var(--accent);
 }
 
+.dialog-select {
+  font-size: 13.5px;
+  font-family: inherit;
+  padding: 7px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-editor);
+  color: var(--text-strong);
+  outline: none;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;

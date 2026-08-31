@@ -12,7 +12,7 @@ import MarkdownEditor from "./components/MarkdownEditor";
 import LayoutEditor from "./components/LayoutEditor";
 import StatusBar from "./components/StatusBar";
 import Banners from "./components/Banners";
-import PromptDialog from "./components/PromptDialog";
+import NewNoteDialog from "./components/NewNoteDialog";
 import ShortcutsDialog from "./components/ShortcutsDialog";
 
 export default function App() {
@@ -130,13 +130,7 @@ export default function App() {
         <StatusBar doc={doc} />
       </div>
       {newNoteOpen && (
-        <PromptDialog
-          title="Ny note"
-          placeholder="Titel på noten"
-          submitLabel="Opret"
-          onClose={() => useStore.getState().setNewNoteOpen(false)}
-          onSubmit={(name) => void useStore.getState().newNote(name)}
-        />
+        <NewNoteDialog onClose={() => useStore.getState().setNewNoteOpen(false)} />
       )}
       {shortcutsOpen && (
         <ShortcutsDialog onClose={() => useStore.getState().setShortcutsOpen(false)} />
