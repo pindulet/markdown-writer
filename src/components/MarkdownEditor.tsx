@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  indentWithTab,
+} from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
@@ -73,6 +78,32 @@ function setHeading(view: EditorView, level: number) {
   view.focus();
 }
 
+function clearHeading(view: EditorView): boolean {
+  const { state } = view;
+  const sel = state.selection.main;
+  const fromLine = state.doc.lineAt(sel.from).number;
+  const toLine = state.doc.lineAt(sel.to).number;
+  const changes = [];
+  for (let n = fromLine; n <= toLine; n++) {
+    const line = state.doc.line(n);
+    const existing = line.text.match(/^#{1,6}\s+/);
+    if (existing) {
+      changes.push({ from: line.from, to: line.from + existing[0].length, insert: "" });
+    }
+  }
+  if (changes.length) view.dispatch({ changes });
+  view.focus();
+  return true;
+}
+
+const headingKeymap = Array.from({ length: 6 }, (_, i) => ({
+  key: `Mod-${i + 1}`,
+  run: (v: EditorView) => {
+    setHeading(v, i + 1);
+    return true;
+  },
+}));
+
 function togglePrefix(view: EditorView, prefix: string) {
   const { state } = view;
   const sel = state.selection.main;
@@ -123,6 +154,9 @@ export default function MarkdownEditor({ doc }: { doc: Doc }) {
                 return true;
               },
             },
+            ...headingKeymap,
+            { key: "Mod-0", run: clearHeading },
+            indentWithTab,
             ...historyKeymap,
             ...defaultKeymap,
           ]),

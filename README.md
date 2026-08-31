@@ -28,6 +28,9 @@ appen.
 | ⌘N | Ny note |
 | ⌘B / ⌘I | Fed / kursiv |
 | ⌘K | Indsæt link |
+| ⌘1 – ⌘6 | Overskrift 1–6 |
+| ⌘0 | Brødtekst (fjern overskrift) |
+| Tab / ⇧Tab | Ryk ind / ryk ud (lister) |
 | ⌘-klik på link | Åbn link i browser |
 
 ## Udvikling

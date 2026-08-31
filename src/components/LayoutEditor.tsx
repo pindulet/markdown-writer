@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { useEditor, EditorContent, Extension, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { Markdown } from "tiptap-markdown";
@@ -7,6 +7,29 @@ import { openUrl } from "../backend";
 import { useStore, type Doc } from "../store";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import LinkDialog from "./LinkDialog";
+
+// ⌘1–⌘6 for overskrifter, ⌘0 for brødtekst, Tab/⇧Tab som indrykning i lister.
+// Tab sluges altid, så fokus ikke hopper ud af editoren.
+const EditorShortcuts = Extension.create({
+  name: "editorShortcuts",
+  addKeyboardShortcuts() {
+    const shortcuts: Record<string, () => boolean> = {
+      "Mod-0": () => this.editor.chain().focus().setParagraph().run(),
+      Tab: () => this.editor.chain().focus().sinkListItem("listItem").run() || true,
+      "Shift-Tab": () =>
+        this.editor.chain().focus().liftListItem("listItem").run() || true,
+    };
+    for (let level = 1; level <= 6; level++) {
+      shortcuts[`Mod-${level}`] = () =>
+        this.editor
+          .chain()
+          .focus()
+          .toggleHeading({ level: level as 1 | 2 | 3 | 4 | 5 | 6 })
+          .run();
+    }
+    return shortcuts;
+  },
+});
 
 function getMarkdown(editor: Editor): string {
   return (editor.storage as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
@@ -20,6 +43,7 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
   const editor = useEditor({
     extensions: [
       StarterKit,
+      EditorShortcuts,
       Link.configure({ openOnClick: false, autolink: true }),
       Markdown.configure({
         html: false,
