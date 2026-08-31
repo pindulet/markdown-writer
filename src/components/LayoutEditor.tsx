@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { useEditor, EditorContent, Extension, type Editor } from "@tiptap/react";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { Markdown } from "tiptap-markdown";
 import { openUrl } from "../backend";
 import { useStore, type Doc } from "../store";
+import { changedBlockIndices, splitBlocks } from "../diff";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import LinkDialog from "./LinkDialog";
 
@@ -31,6 +34,49 @@ const EditorShortcuts = Extension.create({
   },
 });
 
+// Fremhæver de topniveau-blokke, Claude har ændret. Sættes via
+// transaction-meta med en liste af blokindeks; tom liste rydder.
+const claudeHighlightKey = new PluginKey("claudeHighlight");
+
+const ClaudeHighlight = Extension.create({
+  name: "claudeHighlight",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        key: claudeHighlightKey,
+        state: {
+          init: () => DecorationSet.empty,
+          apply(tr, old) {
+            const meta = tr.getMeta(claudeHighlightKey) as number[] | undefined;
+            if (meta !== undefined) {
+              if (!meta.length) return DecorationSet.empty;
+              const decos: Decoration[] = [];
+              let index = 0;
+              tr.doc.forEach((node, offset) => {
+                if (meta.includes(index)) {
+                  decos.push(
+                    Decoration.node(offset, offset + node.nodeSize, {
+                      class: "claude-changed",
+                    })
+                  );
+                }
+                index++;
+              });
+              return DecorationSet.create(tr.doc, decos);
+            }
+            return old.map(tr.mapping, tr.doc);
+          },
+        },
+        props: {
+          decorations(state) {
+            return this.getState(state);
+          },
+        },
+      }),
+    ];
+  },
+});
+
 function getMarkdown(editor: Editor): string {
   return (editor.storage as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
 }
@@ -44,6 +90,7 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
     extensions: [
       StarterKit,
       EditorShortcuts,
+      ClaudeHighlight,
       Link.configure({ openOnClick: false, autolink: true }),
       Markdown.configure({
         html: false,
@@ -75,6 +122,20 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
       editor.commands.setContent(doc.content, false);
     }
   }, [doc.content, editor]);
+
+  // fremhæv de blokke, Claude har ændret, mens banneret vises
+  useEffect(() => {
+    if (!editor) return;
+    let indices: number[] = [];
+    if (doc.showExternalBanner && doc.prevContent !== null) {
+      const blocks = splitBlocks(doc.content);
+      // kun når markdown-blokke og topniveau-noder er 1:1, ellers udelades fremhævning
+      if (editor.state.doc.childCount === blocks.length) {
+        indices = changedBlockIndices(doc.prevContent, doc.content);
+      }
+    }
+    editor.view.dispatch(editor.state.tr.setMeta(claudeHighlightKey, indices));
+  }, [doc.content, doc.prevContent, doc.showExternalBanner, editor]);
 
   const applyLink = (url: string) => {
     if (!editor) return;

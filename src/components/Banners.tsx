@@ -34,7 +34,7 @@ export default function Banners({ doc }: { doc: Doc }) {
           <path d="M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3z" />
         </svg>
         <span className="banner-text">
-          Claude har opdateret filen — den nye version vises.
+          Claude har opdateret filen — ændringerne er fremhævet.
         </span>
         <span className="flex-spacer" />
         {doc.prevContent !== null && (

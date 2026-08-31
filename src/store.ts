@@ -295,7 +295,9 @@ export const useStore = create<Store>((set, get) => ({
         continue;
       }
       if (!fresh.dirty) {
-        // ingen ugemte ændringer: opdater lydløst og vis diskret besked
+        // ingen ugemte ændringer: opdater lydløst og vis diskret besked.
+        // Banneret sættes også på faner i baggrunden, så fremhævningen
+        // venter, når fanen aktiveres.
         const isActive = get().activePath === path;
         set({
           docs: {
@@ -306,7 +308,7 @@ export const useStore = create<Store>((set, get) => ({
               content: disk,
               missing: false,
               claudeUpdated: !isActive,
-              showExternalBanner: isActive,
+              showExternalBanner: true,
               lastExternalAt: Date.now(),
             },
           },

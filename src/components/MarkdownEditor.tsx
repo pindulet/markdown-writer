@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { EditorState } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorState, StateEffect, StateField } from "@codemirror/state";
+import { Decoration, EditorView, keymap, type DecorationSet } from "@codemirror/view";
 import {
   defaultKeymap,
   history,
@@ -11,8 +11,28 @@ import { markdown } from "@codemirror/lang-markdown";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { useStore, type Doc } from "../store";
+import { changedBlockIndices, splitBlocks } from "../diff";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import LinkDialog from "./LinkDialog";
+
+// Linjefremhævning af Claudes ændringer, styret via effekt
+const setClaudeHighlights = StateEffect.define<number[]>(); // linjestart-positioner
+const claudeLineDeco = Decoration.line({ class: "cm-claude-changed" });
+const claudeHighlightField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (effect.is(setClaudeHighlights)) {
+        deco = effect.value.length
+          ? Decoration.set(effect.value.map((pos) => claudeLineDeco.range(pos)))
+          : Decoration.none;
+      }
+    }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
 
 const mdHighlight = HighlightStyle.define([
   { tag: tags.heading1, fontWeight: "700", color: "var(--text-strong)" },
@@ -163,6 +183,7 @@ export default function MarkdownEditor({ doc }: { doc: Doc }) {
           markdown(),
           EditorView.lineWrapping,
           syntaxHighlighting(mdHighlight),
+          claudeHighlightField,
           EditorView.contentAttributes.of({
             spellcheck: "true",
             autocorrect: "on",
@@ -200,6 +221,27 @@ export default function MarkdownEditor({ doc }: { doc: Doc }) {
       });
     }
   }, [doc.content]);
+
+  // fremhæv de linjer, Claude har ændret, mens banneret vises
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    let positions: number[] = [];
+    if (doc.showExternalBanner && doc.prevContent !== null) {
+      const blocks = splitBlocks(doc.content);
+      const changed = changedBlockIndices(doc.prevContent, doc.content);
+      const totalLines = view.state.doc.lines;
+      for (const idx of changed) {
+        const block = blocks[idx];
+        if (!block) continue;
+        for (let n = block.startLine + 1; n <= block.endLine + 1 && n <= totalLines; n++) {
+          positions.push(view.state.doc.line(n).from);
+        }
+      }
+      positions = Array.from(new Set(positions)).sort((a, b) => a - b);
+    }
+    view.dispatch({ effects: setClaudeHighlights.of(positions) });
+  }, [doc.content, doc.prevContent, doc.showExternalBanner]);
 
   const menuItems: MenuItem[] = [
     { label: "Fed", action: () => viewRef.current && wrapSelection(viewRef.current, "**") },
