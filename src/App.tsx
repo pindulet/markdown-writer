@@ -13,6 +13,7 @@ import LayoutEditor from "./components/LayoutEditor";
 import StatusBar from "./components/StatusBar";
 import Banners from "./components/Banners";
 import NewNoteDialog from "./components/NewNoteDialog";
+import PromptDialog from "./components/PromptDialog";
 import ShortcutsDialog from "./components/ShortcutsDialog";
 
 export default function App() {
@@ -23,6 +24,7 @@ export default function App() {
   const view = useStore((s) => s.view);
   const sidebarVisible = useStore((s) => s.sidebarVisible);
   const newNoteOpen = useStore((s) => s.newNoteOpen);
+  const newFolderParent = useStore((s) => s.newFolderParent);
   const shortcutsOpen = useStore((s) => s.shortcutsOpen);
 
   useEffect(() => {
@@ -131,6 +133,19 @@ export default function App() {
       </div>
       {newNoteOpen && (
         <NewNoteDialog onClose={() => useStore.getState().setNewNoteOpen(false)} />
+      )}
+      {newFolderParent !== null && (
+        <PromptDialog
+          title={
+            newFolderParent
+              ? `Ny mappe i ${newFolderParent.replaceAll("/", " / ")}`
+              : "Ny mappe"
+          }
+          placeholder="Navn på mappen"
+          submitLabel="Opret"
+          onClose={() => useStore.getState().setNewFolderParent(null)}
+          onSubmit={(name) => void useStore.getState().newFolder(name)}
+        />
       )}
       {shortcutsOpen && (
         <ShortcutsDialog onClose={() => useStore.getState().setShortcutsOpen(false)} />

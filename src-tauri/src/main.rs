@@ -23,7 +23,13 @@ struct FileEntry {
     modified_ms: u64,
 }
 
-fn collect_md(dir: &Path, root: &Path, out: &mut Vec<FileEntry>) {
+#[derive(Serialize)]
+struct FolderListing {
+    files: Vec<FileEntry>,
+    dirs: Vec<String>,
+}
+
+fn collect_md(dir: &Path, root: &Path, out: &mut Vec<FileEntry>, dirs: &mut Vec<String>) {
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return,
@@ -35,7 +41,10 @@ fn collect_md(dir: &Path, root: &Path, out: &mut Vec<FileEntry>) {
             continue;
         }
         if path.is_dir() {
-            collect_md(&path, root, out);
+            if let Ok(rel) = path.strip_prefix(root) {
+                dirs.push(rel.to_string_lossy().to_string());
+            }
+            collect_md(&path, root, out, dirs);
         } else if path
             .extension()
             .map(|e| e.eq_ignore_ascii_case("md"))
@@ -68,14 +77,28 @@ fn collect_md(dir: &Path, root: &Path, out: &mut Vec<FileEntry>) {
 }
 
 #[tauri::command]
-fn list_folder(path: String) -> Result<Vec<FileEntry>, String> {
+fn list_folder(path: String) -> Result<FolderListing, String> {
     let root = PathBuf::from(&path);
     if !root.is_dir() {
         return Err("Mappen findes ikke".into());
     }
-    let mut out = Vec::new();
-    collect_md(&root, &root, &mut out);
-    Ok(out)
+    let mut files = Vec::new();
+    let mut dirs = Vec::new();
+    collect_md(&root, &root, &mut files, &mut dirs);
+    Ok(FolderListing { files, dirs })
+}
+
+#[tauri::command]
+fn create_folder(dir: String, name: String) -> Result<String, String> {
+    let base = PathBuf::from(&dir);
+    let mut candidate = base.join(&name);
+    let mut i = 2;
+    while candidate.exists() {
+        candidate = base.join(format!("{} {}", name, i));
+        i += 1;
+    }
+    fs::create_dir_all(&candidate).map_err(|e| e.to_string())?;
+    Ok(candidate.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -176,6 +199,7 @@ fn main() {
             read_file,
             write_file,
             create_file,
+            create_folder,
             rename_file,
             delete_file,
             watch_folder,

@@ -5,8 +5,8 @@ import type { FileEntry } from "../backend";
 interface MenuState {
   x: number;
   y: number;
-  kind: "file" | "folder";
-  path: string; // absolut sti for filer, rel_dir for mapper
+  kind: "file" | "folder" | "root";
+  path: string; // absolut sti for filer, rel_dir for mapper, "" for roden
 }
 
 interface FolderNode {
@@ -16,11 +16,12 @@ interface FolderNode {
   files: FileEntry[];
 }
 
-function buildTree(files: FileEntry[]): FolderNode {
+function buildTree(files: FileEntry[], dirs: string[]): FolderNode {
   const root: FolderNode = { name: "", relPath: "", folders: [], files: [] };
   const lookup = new Map<string, FolderNode>([["", root]]);
-  for (const f of files) {
-    const parts = f.rel_dir ? f.rel_dir.split("/") : [];
+  const ensureDir = (relDir: string): FolderNode => {
+    if (!relDir) return root;
+    const parts = relDir.split("/");
     let node = root;
     let acc = "";
     for (const part of parts) {
@@ -33,8 +34,11 @@ function buildTree(files: FileEntry[]): FolderNode {
       }
       node = child;
     }
-    node.files.push(f);
-  }
+    return node;
+  };
+  // alle mapper med — også dem uden noter i
+  for (const d of dirs) ensureDir(d);
+  for (const f of files) ensureDir(f.rel_dir).files.push(f);
   const sortNode = (node: FolderNode) => {
     node.folders.sort((a, b) => a.name.localeCompare(b.name, "da"));
     node.files.sort((a, b) => a.name.localeCompare(b.name, "da"));
@@ -54,6 +58,7 @@ function loadCollapsed(): Set<string> {
 
 export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) {
   const files = useStore((s) => s.files);
+  const dirs = useStore((s) => s.dirs);
   const folder = useStore((s) => s.folder);
   const activePath = useStore((s) => s.activePath);
   const docs = useStore((s) => s.docs);
@@ -64,7 +69,7 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
 
-  const tree = useMemo(() => buildTree(files), [files]);
+  const tree = useMemo(() => buildTree(files, dirs), [files, dirs]);
 
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -135,6 +140,7 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
         onClick={() => void useStore.getState().openFile(f.path)}
         onContextMenu={(e) => {
           e.preventDefault();
+          e.stopPropagation();
           setMenu({ x: e.clientX, y: e.clientY, kind: "file", path: f.path });
         }}
       >
@@ -157,6 +163,7 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
           onClick={() => toggleFolder(node.relPath)}
           onContextMenu={(e) => {
             e.preventDefault();
+            e.stopPropagation();
             setMenu({ x: e.clientX, y: e.clientY, kind: "folder", path: node.relPath });
           }}
         >
@@ -224,7 +231,13 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
           </button>
         )}
       </div>
-      <div className="file-list">
+      <div
+        className="file-list"
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setMenu({ x: e.clientX, y: e.clientY, kind: "root", path: "" });
+        }}
+      >
         {searchResults ? (
           searchResults.length === 0 ? (
             <div className="search-empty">Ingen noter matcher</div>
@@ -276,15 +289,26 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
               </div>
             </>
           ) : (
-            <div
-              className="context-item"
-              onClick={() => {
-                useStore.getState().setNewNoteOpen(true, menu.path);
-                setMenu(null);
-              }}
-            >
-              Ny note her
-            </div>
+            <>
+              <div
+                className="context-item"
+                onClick={() => {
+                  useStore.getState().setNewNoteOpen(true, menu.path);
+                  setMenu(null);
+                }}
+              >
+                Ny note
+              </div>
+              <div
+                className="context-item"
+                onClick={() => {
+                  useStore.getState().setNewFolderParent(menu.path);
+                  setMenu(null);
+                }}
+              >
+                Ny mappe
+              </div>
+            </>
           )}
         </div>
       )}

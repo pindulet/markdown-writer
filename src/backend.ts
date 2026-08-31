@@ -11,11 +11,17 @@ export interface FileEntry {
   modified_ms: number;
 }
 
+export interface FolderListing {
+  files: FileEntry[];
+  dirs: string[]; // alle undermapper som relative stier, også tomme
+}
+
 interface Backend {
-  listFolder(path: string): Promise<FileEntry[]>;
+  listFolder(path: string): Promise<FolderListing>;
   readFile(path: string): Promise<string>;
   writeFile(path: string, content: string): Promise<void>;
   createFile(dir: string, name: string): Promise<string>;
+  createFolder(dir: string, name: string): Promise<string>;
   renameFile(path: string, newName: string): Promise<string>;
   deleteFile(path: string): Promise<void>;
   watchFolder(path: string): Promise<void>;
@@ -32,7 +38,7 @@ function createTauriBackend(): Backend {
   return {
     listFolder: async (path) => {
       const { invoke } = await import("@tauri-apps/api/core");
-      return invoke<FileEntry[]>("list_folder", { path });
+      return invoke<FolderListing>("list_folder", { path });
     },
     readFile: async (path) => {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -45,6 +51,10 @@ function createTauriBackend(): Backend {
     createFile: async (dir, name) => {
       const { invoke } = await import("@tauri-apps/api/core");
       return invoke<string>("create_file", { dir, name });
+    },
+    createFolder: async (dir, name) => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<string>("create_folder", { dir, name });
     },
     renameFile: async (path, newName) => {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -118,6 +128,7 @@ function createMockBackend(): Backend {
     [`${ROOT}/Projekter/Markdown writer.md`, `# Markdown writer\n\nStatus og næste skridt.\n`],
     [`${ROOT}/Projekter/Arkiv/Gammel idé.md`, `# Gammel idé\n\nParkeret.\n`],
   ]);
+  const mockDirs = new Set<string>(["Dagbog", "Projekter", "Projekter/Arkiv"]);
   const subs = new Set<(paths: string[]) => void>();
   const emit = (paths: string[]) => subs.forEach((cb) => cb(paths));
 
@@ -130,8 +141,8 @@ function createMockBackend(): Backend {
   };
 
   return {
-    listFolder: async (path) =>
-      Array.from(files.keys())
+    listFolder: async (path) => ({
+      files: Array.from(files.keys())
         .filter((p) => p.startsWith(path + "/"))
         .map((p) => {
           const rel = p.slice(path.length + 1);
@@ -143,6 +154,8 @@ function createMockBackend(): Backend {
             modified_ms: Date.now(),
           };
         }),
+      dirs: Array.from(mockDirs).sort(),
+    }),
     readFile: async (path) => {
       const content = files.get(path);
       if (content === undefined) throw new Error("Filen findes ikke");
@@ -159,6 +172,17 @@ function createMockBackend(): Backend {
       files.set(candidate, "");
       emit([candidate]);
       return candidate;
+    },
+    createFolder: async (dir, name) => {
+      const parentRel = dir === ROOT ? "" : dir.slice(ROOT.length + 1);
+      let rel = parentRel ? `${parentRel}/${name}` : name;
+      let i = 2;
+      while (mockDirs.has(rel)) {
+        rel = parentRel ? `${parentRel}/${name} ${i}` : `${name} ${i}`;
+        i += 1;
+      }
+      mockDirs.add(rel);
+      return `${ROOT}/${rel}`;
     },
     renameFile: async (path, newName) => {
       const dir = path.slice(0, path.lastIndexOf("/"));
@@ -195,6 +219,7 @@ export const listFolder = backend.listFolder;
 export const readFile = backend.readFile;
 export const writeFile = backend.writeFile;
 export const createFile = backend.createFile;
+export const createFolder = backend.createFolder;
 export const renameFile = backend.renameFile;
 export const deleteFile = backend.deleteFile;
 export const watchFolder = backend.watchFolder;

@@ -2,26 +2,16 @@ import { useMemo, useState } from "react";
 import { useStore } from "../store";
 
 export default function NewNoteDialog({ onClose }: { onClose: () => void }) {
-  const files = useStore((s) => s.files);
+  const allDirs = useStore((s) => s.dirs);
   const folder = useStore((s) => s.folder);
   const initialDir = useStore((s) => s.newNoteDir);
   const [name, setName] = useState("");
   const [dir, setDir] = useState(initialDir);
 
-  // alle undermapper, der indeholder noter — inkl. mellemliggende niveauer
-  const dirs = useMemo(() => {
-    const set = new Set<string>();
-    for (const f of files) {
-      if (!f.rel_dir) continue;
-      const parts = f.rel_dir.split("/");
-      let acc = "";
-      for (const part of parts) {
-        acc = acc ? `${acc}/${part}` : part;
-        set.add(acc);
-      }
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "da"));
-  }, [files]);
+  const dirs = useMemo(
+    () => [...allDirs].sort((a, b) => a.localeCompare(b, "da")),
+    [allDirs]
+  );
 
   const rootName = folder?.split("/").filter(Boolean).pop() ?? "Noter";
 

@@ -19,6 +19,7 @@ export interface Doc {
 interface Store {
   folder: string | null;
   files: fsApi.FileEntry[];
+  dirs: string[];
   tabs: string[];
   activePath: string | null;
   docs: Record<string, Doc>;
@@ -27,6 +28,7 @@ interface Store {
   changedFiles: Record<string, true>;
   newNoteOpen: boolean;
   newNoteDir: string; // forvalgt undermappe (rel_dir), "" = rodmappen
+  newFolderParent: string | null; // null = lukket, "" = rodmappen, ellers rel_dir
   shortcutsOpen: boolean;
 
   init: () => Promise<void>;
@@ -46,8 +48,10 @@ interface Store {
   toggleView: () => void;
   toggleSidebar: () => void;
   setNewNoteOpen: (open: boolean, dir?: string) => void;
+  setNewFolderParent: (parent: string | null) => void;
   setShortcutsOpen: (open: boolean) => void;
   newNote: (name: string, relDir: string) => Promise<void>;
+  newFolder: (name: string) => Promise<void>;
   renameNote: (path: string, newName: string) => Promise<void>;
   removeNote: (path: string) => Promise<void>;
 }
@@ -89,6 +93,7 @@ function persistSession(state: {
 export const useStore = create<Store>((set, get) => ({
   folder: null,
   files: [],
+  dirs: [],
   tabs: [],
   activePath: null,
   docs: {},
@@ -97,6 +102,7 @@ export const useStore = create<Store>((set, get) => ({
   changedFiles: {},
   newNoteOpen: false,
   newNoteDir: "",
+  newFolderParent: null,
   shortcutsOpen: false,
 
   init: async () => {
@@ -134,9 +140,9 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   setFolder: async (path: string) => {
-    const files = await fsApi.listFolder(path);
+    const listing = await fsApi.listFolder(path);
     await fsApi.watchFolder(path);
-    set({ folder: path, files, changedFiles: {} });
+    set({ folder: path, files: listing.files, dirs: listing.dirs, changedFiles: {} });
     persistSession({ ...get() });
   },
 
@@ -144,8 +150,8 @@ export const useStore = create<Store>((set, get) => ({
     const { folder } = get();
     if (!folder) return;
     try {
-      const files = await fsApi.listFolder(folder);
-      set({ files });
+      const listing = await fsApi.listFolder(folder);
+      set({ files: listing.files, dirs: listing.dirs });
     } catch {
       // mappen kan være midlertidigt utilgængelig
     }
@@ -405,6 +411,8 @@ export const useStore = create<Store>((set, get) => ({
   setNewNoteOpen: (open: boolean, dir?: string) =>
     set({ newNoteOpen: open, newNoteDir: dir ?? "" }),
 
+  setNewFolderParent: (parent: string | null) => set({ newFolderParent: parent }),
+
   setShortcutsOpen: (open: boolean) => set({ shortcutsOpen: open }),
 
   newNote: async (name: string, relDir: string) => {
@@ -415,6 +423,16 @@ export const useStore = create<Store>((set, get) => ({
     const path = await fsApi.createFile(dir, title);
     await get().refreshFiles();
     await get().openFile(path);
+  },
+
+  newFolder: async (name: string) => {
+    const { folder, newFolderParent } = get();
+    if (!folder || newFolderParent === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const parent = newFolderParent ? `${folder}/${newFolderParent}` : folder;
+    await fsApi.createFolder(parent, trimmed);
+    await get().refreshFiles();
   },
 
   renameNote: async (path: string, newName: string) => {
