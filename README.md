@@ -17,6 +17,9 @@ appen.
 - macOS' indbyggede stavekontrol (højreklik på et ord uden markering)
 - Fokustilstand: ⌘\ skjuler sidebaren · Ny note: ⌘N
 - Atomiske skrivninger — Claude læser aldrig en halvgemt fil
+- Billeder: indsæt med paste (gemmes i vaultens `Billeder`-mappe), vises i layout view
+- Obsidian-wikilinks: `[[Note]]` og `[[Note|alias]]` — ⌘-klik åbner (eller opretter) noten
+- Faktabokse: `> [!fakta] Titel` vises som farvet boks (også `info`, `tip`, `advarsel` m.fl.)
 - Lys og mørk tilstand følger systemet
 
 ## Genveje

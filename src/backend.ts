@@ -4,6 +4,8 @@
 // I browseren kan `window.claudeWrite(path, content)` simulere, at
 // Claude ændrer en fil på disken.
 
+import { convertFileSrc } from "@tauri-apps/api/core";
+
 export interface FileEntry {
   name: string;
   path: string;
@@ -22,6 +24,7 @@ interface Backend {
   writeFile(path: string, content: string): Promise<void>;
   createFile(dir: string, name: string): Promise<string>;
   createFolder(dir: string, name: string): Promise<string>;
+  saveImage(dir: string, name: string, dataBase64: string): Promise<string>;
   renameFile(path: string, newName: string): Promise<string>;
   deleteFile(path: string): Promise<void>;
   watchFolder(path: string): Promise<void>;
@@ -55,6 +58,10 @@ function createTauriBackend(): Backend {
     createFolder: async (dir, name) => {
       const { invoke } = await import("@tauri-apps/api/core");
       return invoke<string>("create_folder", { dir, name });
+    },
+    saveImage: async (dir, name, dataBase64) => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<string>("save_image", { dir, name, dataBase64 });
     },
     renameFile: async (path, newName) => {
       const { invoke } = await import("@tauri-apps/api/core");
@@ -173,6 +180,7 @@ function createMockBackend(): Backend {
       emit([candidate]);
       return candidate;
     },
+    saveImage: async (dir, name) => `${dir}/${name}`,
     createFolder: async (dir, name) => {
       const parentRel = dir === ROOT ? "" : dir.slice(ROOT.length + 1);
       let rel = parentRel ? `${parentRel}/${name}` : name;
@@ -220,6 +228,12 @@ export const readFile = backend.readFile;
 export const writeFile = backend.writeFile;
 export const createFile = backend.createFile;
 export const createFolder = backend.createFolder;
+export const saveImage = backend.saveImage;
+
+// Absolut filsti → URL webviewet kan vise (asset-protokollen i Tauri)
+export function resolveAsset(absPath: string): string {
+  return isTauri ? convertFileSrc(absPath) : absPath;
+}
 export const renameFile = backend.renameFile;
 export const deleteFile = backend.deleteFile;
 export const watchFolder = backend.watchFolder;

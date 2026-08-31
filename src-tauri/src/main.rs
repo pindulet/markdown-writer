@@ -89,6 +89,28 @@ fn list_folder(path: String) -> Result<FolderListing, String> {
 }
 
 #[tauri::command]
+fn save_image(dir: String, name: String, data_base64: String) -> Result<String, String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data_base64)
+        .map_err(|e| e.to_string())?;
+    let base = PathBuf::from(&dir);
+    fs::create_dir_all(&base).map_err(|e| e.to_string())?;
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((s, e)) => (s.to_string(), e.to_string()),
+        None => (name.clone(), "png".to_string()),
+    };
+    let mut candidate = base.join(format!("{}.{}", stem, ext));
+    let mut i = 2;
+    while candidate.exists() {
+        candidate = base.join(format!("{} {}.{}", stem, i, ext));
+        i += 1;
+    }
+    fs::write(&candidate, bytes).map_err(|e| e.to_string())?;
+    Ok(candidate.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 fn create_folder(dir: String, name: String) -> Result<String, String> {
     let base = PathBuf::from(&dir);
     let mut candidate = base.join(&name);
@@ -200,6 +222,7 @@ fn main() {
             write_file,
             create_file,
             create_folder,
+            save_image,
             rename_file,
             delete_file,
             watch_folder,

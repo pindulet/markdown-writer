@@ -36,6 +36,7 @@ interface Store {
   refreshFiles: () => Promise<void>;
   openFile: (path: string) => Promise<void>;
   openExternalFile: (path: string) => Promise<void>;
+  openWikilink: (target: string) => Promise<void>;
   activate: (path: string) => void;
   closeTab: (path: string) => void;
   editContent: (path: string, content: string) => void;
@@ -183,6 +184,23 @@ export const useStore = create<Store>((set, get) => ({
         }
       }
     }
+    await get().openFile(path);
+  },
+
+  // [[Wikilink]]: find noten på navn (uanset mappe); findes den ikke,
+  // oprettes den i rodmappen — som i Obsidian
+  openWikilink: async (target: string) => {
+    const raw = (target.split("|")[0] ?? "").split("#")[0].trim();
+    if (!raw) return;
+    const { files, folder } = get();
+    const found = files.find((f) => f.name.toLowerCase() === raw.toLowerCase());
+    if (found) {
+      await get().openFile(found.path);
+      return;
+    }
+    if (!folder) return;
+    const path = await fsApi.createFile(folder, raw);
+    await get().refreshFiles();
     await get().openFile(path);
   },
 

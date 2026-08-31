@@ -19,6 +19,7 @@
     "@tauri-apps/api": "^2.4.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-opener": "^2.2.0",
+    "@tiptap/extension-image": "^2.27.2",
     "@tiptap/extension-link": "^2.11.5",
     "@tiptap/pm": "^2.11.5",
     "@tiptap/react": "^2.11.5",

@@ -569,6 +569,81 @@ button {
   border-radius: 2px;
 }
 
+/* Billeder */
+
+.layout-content img {
+  max-width: 100%;
+  height: auto;
+  align-self: flex-start; /* editoren er en flex-kolonne; undgå at billedet strækkes */
+  border-radius: 8px;
+  display: block;
+  margin: 4px 0 14px;
+}
+
+.layout-content img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Wikilinks */
+
+.wikilink,
+.cm-wikilink {
+  color: var(--accent);
+  border-radius: 4px;
+  background: var(--accent-soft);
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+/* Callout-bokse (> [!fakta] …) */
+
+.layout-content blockquote.callout {
+  font-style: normal;
+  color: var(--text);
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin: 0 0 14px;
+}
+
+.layout-content blockquote.callout p {
+  margin: 0 0 8px;
+}
+
+.layout-content blockquote.callout p:last-child {
+  margin: 0;
+}
+
+.callout-marker {
+  font-weight: 700;
+  font-size: 0.75em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.layout-content blockquote.callout-fakta,
+.layout-content blockquote.callout-info,
+.layout-content blockquote.callout-note {
+  background: rgba(84, 130, 191, 0.13);
+  border-left-color: #5482bf;
+}
+
+.layout-content blockquote.callout-tip {
+  background: rgba(87, 152, 106, 0.13);
+  border-left-color: #57986a;
+}
+
+.layout-content blockquote.callout-advarsel,
+.layout-content blockquote.callout-warning,
+.layout-content blockquote.callout-vigtigt,
+.layout-content blockquote.callout-important {
+  background: rgba(196, 138, 51, 0.14);
+  border-left-color: #c48a33;
+}
+
 /* Layout-visning (TipTap) */
 
 .layout-editor {

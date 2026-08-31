@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { EditorState, StateEffect, StateField } from "@codemirror/state";
-import { Decoration, EditorView, keymap, type DecorationSet } from "@codemirror/view";
+import {
+  Decoration,
+  EditorView,
+  keymap,
+  MatchDecorator,
+  ViewPlugin,
+  type DecorationSet,
+  type ViewUpdate,
+} from "@codemirror/view";
 import {
   defaultKeymap,
   history,
@@ -12,8 +20,64 @@ import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { useStore, type Doc } from "../store";
 import { changedBlockIndices, splitBlocks } from "../diff";
+import { saveClipboardImage } from "../images";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import LinkDialog from "./LinkDialog";
+
+// [[Wikilinks]] fremhæves og kan ⌘-klikkes
+const wikilinkMatcher = new MatchDecorator({
+  regexp: /\[\[([^\][\n]+)\]\]/g,
+  decoration: (match) =>
+    Decoration.mark({
+      class: "cm-wikilink",
+      attributes: { "data-target": match[1] },
+    }),
+});
+
+const wikilinkPlugin = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet;
+    constructor(view: EditorView) {
+      this.decorations = wikilinkMatcher.createDeco(view);
+    }
+    update(update: ViewUpdate) {
+      this.decorations = wikilinkMatcher.updateDeco(update, this.decorations);
+    }
+  },
+  { decorations: (v) => v.decorations }
+);
+
+const editorEvents = EditorView.domEventHandlers({
+  mousedown: (event) => {
+    if (!event.metaKey && !event.ctrlKey) return false;
+    const link = (event.target as HTMLElement).closest(".cm-wikilink");
+    if (!link) return false;
+    event.preventDefault();
+    const target = link.getAttribute("data-target");
+    if (target) void useStore.getState().openWikilink(target);
+    return true;
+  },
+  paste: (event, view) => {
+    const items = event.clipboardData?.items;
+    if (!items) return false;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        event.preventDefault();
+        void saveClipboardImage(file).then((rel) => {
+          if (!rel) return;
+          const sel = view.state.selection.main;
+          view.dispatch({
+            changes: { from: sel.from, to: sel.to, insert: `![](${rel})` },
+          });
+        });
+        return true;
+      }
+    }
+    return false;
+  },
+});
 
 // Linjefremhævning af Claudes ændringer, styret via effekt
 const setClaudeHighlights = StateEffect.define<number[]>(); // linjestart-positioner
@@ -184,6 +248,8 @@ export default function MarkdownEditor({ doc }: { doc: Doc }) {
           EditorView.lineWrapping,
           syntaxHighlighting(mdHighlight),
           claudeHighlightField,
+          wikilinkPlugin,
+          editorEvents,
           EditorView.contentAttributes.of({
             spellcheck: "true",
             autocorrect: "on",
@@ -250,6 +316,21 @@ export default function MarkdownEditor({ doc }: { doc: Doc }) {
     { label: "Overskrift 2", action: () => viewRef.current && setHeading(viewRef.current, 2) },
     { label: "Punktliste", action: () => viewRef.current && togglePrefix(viewRef.current, "- ") },
     { label: "Citat", action: () => viewRef.current && togglePrefix(viewRef.current, "> ") },
+    {
+      label: "Faktaboks",
+      action: () => {
+        const view = viewRef.current;
+        if (!view) return;
+        const line = view.state.doc.lineAt(view.state.selection.main.to);
+        view.dispatch({
+          changes: {
+            from: line.to,
+            insert: "\n\n> [!fakta] Overskrift\n> Tekst …",
+          },
+        });
+        view.focus();
+      },
+    },
     { label: "Link …", action: () => setLinkOpen(true) },
   ];
 

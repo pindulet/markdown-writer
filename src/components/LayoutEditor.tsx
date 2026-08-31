@@ -4,10 +4,24 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
+import Image from "@tiptap/extension-image";
 import { Markdown } from "tiptap-markdown";
 import { openUrl } from "../backend";
 import { useStore, type Doc } from "../store";
 import { changedBlockIndices, splitBlocks } from "../diff";
+import { resolveImageSrc, saveClipboardImage } from "../images";
+import { MarkdownExtras } from "./markdownExtras";
+
+// Billeder gemmes med relativ sti i markdown; kun visningen slås op
+// gennem asset-protokollen.
+const VaultImage = Image.extend({
+  renderHTML({ HTMLAttributes }) {
+    return [
+      "img",
+      { ...HTMLAttributes, src: resolveImageSrc(String(HTMLAttributes.src ?? "")) },
+    ];
+  },
+});
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import LinkDialog from "./LinkDialog";
 
@@ -91,6 +105,8 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
       StarterKit,
       EditorShortcuts,
       ClaudeHighlight,
+      MarkdownExtras,
+      VaultImage.configure({ allowBase64: true }),
       Link.configure({ openOnClick: false, autolink: true }),
       Markdown.configure({
         html: false,
@@ -107,6 +123,27 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
         autocorrect: "on",
         autocapitalize: "on",
         lang: "da",
+      },
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (!file) continue;
+            event.preventDefault();
+            void saveClipboardImage(file).then((rel) => {
+              if (!rel) return;
+              const imageType = view.state.schema.nodes.image;
+              if (!imageType) return;
+              view.dispatch(
+                view.state.tr.replaceSelectionWith(imageType.create({ src: rel }))
+              );
+            });
+            return true;
+          }
+        }
+        return false;
       },
     },
     onUpdate: ({ editor }) => {
@@ -170,6 +207,17 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
           label: "Citat",
           action: () => editor.chain().focus().toggleBlockquote().run(),
         },
+        {
+          label: "Faktaboks",
+          action: () =>
+            editor
+              .chain()
+              .focus()
+              .insertContent(
+                "<blockquote><p>[!fakta] Overskrift</p><p>Tekst …</p></blockquote>"
+              )
+              .run(),
+        },
         { label: "Link …", action: () => setLinkOpen(true) },
       ]
     : [];
@@ -184,6 +232,13 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
         }
       }}
       onClick={(e) => {
+        const wikilink = (e.target as HTMLElement).closest(".wikilink");
+        if (wikilink && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          const target = wikilink.getAttribute("data-target");
+          if (target) void useStore.getState().openWikilink(target);
+          return;
+        }
         const anchor = (e.target as HTMLElement).closest("a");
         if (anchor && (e.metaKey || e.ctrlKey)) {
           e.preventDefault();
