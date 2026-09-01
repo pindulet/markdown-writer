@@ -6,6 +6,7 @@ const SHORTCUTS: Array<[string, string]> = [
   ["⌘I", "Kursiv"],
   ["⌘K", "Indsæt link"],
   ["⌘1 – ⌘6", "Overskrift 1–6"],
+  ["⇧⌘9", "Tjekliste"],
   ["⌘0", "Brødtekst (fjern overskrift)"],
   ["Tab / ⇧Tab", "Ryk ind / ryk ud (lister)"],
   ["⌘Z / ⇧⌘Z", "Fortryd / annullér fortryd"],

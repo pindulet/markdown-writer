@@ -5,6 +5,25 @@ import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+
+// Uden en tight-attribut serialiserer tiptap-markdown tjeklister med
+// blanke linjer mellem punkterne; punktlister har attributten indbygget.
+const TightTaskList = TaskList.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      tight: {
+        default: true,
+        parseHTML: (el: HTMLElement) =>
+          el.getAttribute("data-tight") === "true" || !el.querySelector("p"),
+        renderHTML: (attrs: { tight?: boolean }) =>
+          attrs.tight ? { "data-tight": "true" } : {},
+      },
+    };
+  },
+});
 import { Markdown } from "tiptap-markdown";
 import { openUrl } from "../backend";
 import { useStore, type Doc } from "../store";
@@ -32,9 +51,14 @@ const EditorShortcuts = Extension.create({
   addKeyboardShortcuts() {
     const shortcuts: Record<string, () => boolean> = {
       "Mod-0": () => this.editor.chain().focus().setParagraph().run(),
-      Tab: () => this.editor.chain().focus().sinkListItem("listItem").run() || true,
+      Tab: () =>
+        this.editor.chain().focus().sinkListItem("listItem").run() ||
+        this.editor.chain().focus().sinkListItem("taskItem").run() ||
+        true,
       "Shift-Tab": () =>
-        this.editor.chain().focus().liftListItem("listItem").run() || true,
+        this.editor.chain().focus().liftListItem("listItem").run() ||
+        this.editor.chain().focus().liftListItem("taskItem").run() ||
+        true,
     };
     for (let level = 1; level <= 6; level++) {
       shortcuts[`Mod-${level}`] = () =>
@@ -107,6 +131,8 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
       ClaudeHighlight,
       MarkdownExtras,
       VaultImage.configure({ allowBase64: true }),
+      TightTaskList,
+      TaskItem.configure({ nested: true }),
       Link.configure({ openOnClick: false, autolink: true }),
       Markdown.configure({
         html: false,
@@ -202,6 +228,10 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
         {
           label: "Punktliste",
           action: () => editor.chain().focus().toggleBulletList().run(),
+        },
+        {
+          label: "Tjekliste",
+          action: () => editor.chain().focus().toggleTaskList().run(),
         },
         {
           label: "Citat",

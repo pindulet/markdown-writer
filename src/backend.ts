@@ -144,7 +144,7 @@ function createMockBackend(): Backend {
     ],
     [
       `${ROOT}/Statusmøde 28. august.md`,
-      `# Statusmøde 28. august\n\n## Aftalt\n\n- Nyhedsbrevet sendes fredag.\n- Opsamling på kundemødet deles inden onsdag.\n\n## Til næste gang\n\nHver især skriver to punkter ind i denne note inden mødet.\n`,
+      `# Statusmøde 28. august\n\n## Aftalt\n\n- Nyhedsbrevet sendes fredag.\n- Opsamling på kundemødet deles inden onsdag.\n\n## Til næste gang\n\n- [ ] Send nyhedsbrevet\n- [x] Book lokale til workshop\n- [ ] Opsamling på kundemødet\n`,
     ],
     [`${ROOT}/Produktideer.md`, `# Produktideer\n\n- Skriv den første ned her.\n`],
     [`${ROOT}/Dagbog/Uge 35 2026.md`, `# Uge 35 2026\n\nUgen hvor editoren blev bygget.\n`],

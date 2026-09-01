@@ -787,6 +787,68 @@ button {
   margin: 0;
 }
 
+/* Tjeklister (- [ ] / - [x]) */
+.layout-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 4px;
+}
+
+.layout-content ul[data-type="taskList"] > li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.layout-content ul[data-type="taskList"] > li > label {
+  flex-shrink: 0;
+}
+
+.layout-content ul[data-type="taskList"] > li > div {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.layout-content ul[data-type="taskList"] > li input[type="checkbox"] {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border: 1.5px solid var(--text-faint);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  top: 2px;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.layout-content ul[data-type="taskList"] > li input[type="checkbox"]:hover {
+  border-color: var(--accent);
+}
+
+.layout-content ul[data-type="taskList"] > li input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.layout-content ul[data-type="taskList"] > li input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 3.5px;
+  top: 0.5px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--bg-editor);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.layout-content ul[data-type="taskList"] > li[data-checked="true"] > div {
+  color: var(--text-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+}
+
 .layout-content blockquote {
   margin: 0 0 14px;
   padding: 2px 0 2px 16px;
