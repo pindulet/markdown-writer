@@ -51,6 +51,25 @@ export default function App() {
     };
   }, []);
 
+  // Git-synk: hent ændringer fra GitHub med jævne mellemrum og når
+  // vinduet får fokus igen (fx efter redigering på telefonen/webben)
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void useStore.getState().syncNow();
+    }, 5 * 60_000);
+    const onFocus = () => {
+      const s = useStore.getState();
+      if (s.lastSyncAt === null || Date.now() - s.lastSyncAt > 60_000) {
+        void s.syncNow();
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!e.metaKey || e.ctrlKey || e.altKey) return;

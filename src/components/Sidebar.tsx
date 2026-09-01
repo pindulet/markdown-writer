@@ -56,6 +56,71 @@ function loadCollapsed(): Set<string> {
   }
 }
 
+function timeLabel(ts: number) {
+  const d = new Date(ts);
+  return `${d.getHours().toString().padStart(2, "0")}.${d
+    .getMinutes()
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+function SyncRow() {
+  const gitRepo = useStore((s) => s.gitRepo);
+  const syncStatus = useStore((s) => s.syncStatus);
+  const syncDetail = useStore((s) => s.syncDetail);
+  const lastSyncAt = useStore((s) => s.lastSyncAt);
+  if (!gitRepo) return null;
+
+  let label: string;
+  let warn = false;
+  switch (syncStatus) {
+    case "syncing":
+      label = "Synkroniserer …";
+      break;
+    case "ok":
+      label = lastSyncAt ? `GitHub · synket ${timeLabel(lastSyncAt)}` : "GitHub · synket";
+      break;
+    case "offline":
+      label = "Ingen forbindelse · gemt lokalt";
+      warn = true;
+      break;
+    case "conflict":
+      label = "Konflikt — kunne ikke flette";
+      warn = true;
+      break;
+    case "error":
+      label = "Synk fejlede — klik for at prøve igen";
+      warn = true;
+      break;
+    default:
+      label = "Synkronisér med GitHub";
+  }
+
+  return (
+    <button
+      className={"sync-btn" + (warn ? " warn" : "")}
+      title={syncDetail ? syncDetail.slice(0, 500) : "Synkronisér nu"}
+      onClick={() => void useStore.getState().syncNow()}
+    >
+      <svg
+        className={syncStatus === "syncing" ? "sync-spin" : ""}
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+        <path d="M21 3v6h-6" />
+      </svg>
+      <span className="sync-label">{label}</span>
+    </button>
+  );
+}
+
 export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) {
   const files = useStore((s) => s.files);
   const dirs = useStore((s) => s.dirs);
@@ -266,6 +331,7 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
           </svg>
           Ny note
         </button>
+        <SyncRow />
       </div>
       {menu && (
         <div

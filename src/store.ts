@@ -3,6 +3,9 @@ import * as fsApi from "./backend";
 
 export type ViewMode = "markdown" | "layout";
 
+// null = endnu ikke synket i denne session
+export type SyncStatus = "syncing" | "ok" | "offline" | "conflict" | "error" | null;
+
 export interface Doc {
   path: string;
   content: string;
@@ -30,6 +33,10 @@ interface Store {
   newNoteDir: string; // forvalgt undermappe (rel_dir), "" = rodmappen
   newFolderParent: string | null; // null = lukket, "" = rodmappen, ellers rel_dir
   shortcutsOpen: boolean;
+  gitRepo: boolean; // den valgte mappe er et git-repo
+  syncStatus: SyncStatus;
+  syncDetail: string;
+  lastSyncAt: number | null;
 
   init: () => Promise<void>;
   setFolder: (path: string) => Promise<void>;
@@ -55,10 +62,19 @@ interface Store {
   newFolder: (name: string) => Promise<void>;
   renameNote: (path: string, newName: string) => Promise<void>;
   removeNote: (path: string) => Promise<void>;
+  scheduleSync: () => void;
+  syncNow: () => Promise<void>;
 }
 
 const saveTimers = new Map<string, number>();
 let refreshTimer: number | null = null;
+
+// Git-synk: kør aldrig to synk samtidig; ændringer under en kørende synk
+// udløser én opfølgende. Debounce samler skriverier i ét commit.
+const SYNC_DEBOUNCE_MS = 20_000;
+let syncTimer: number | null = null;
+let syncRunning = false;
+let syncQueued = false;
 
 function newDoc(path: string, content: string): Doc {
   return {
@@ -105,6 +121,10 @@ export const useStore = create<Store>((set, get) => ({
   newNoteDir: "",
   newFolderParent: null,
   shortcutsOpen: false,
+  gitRepo: false,
+  syncStatus: null,
+  syncDetail: "",
+  lastSyncAt: null,
 
   init: async () => {
     let folder: string | null = null;
@@ -143,8 +163,27 @@ export const useStore = create<Store>((set, get) => ({
   setFolder: async (path: string) => {
     const listing = await fsApi.listFolder(path);
     await fsApi.watchFolder(path);
-    set({ folder: path, files: listing.files, dirs: listing.dirs, changedFiles: {} });
+    set({
+      folder: path,
+      files: listing.files,
+      dirs: listing.dirs,
+      changedFiles: {},
+      gitRepo: false,
+      syncStatus: null,
+      syncDetail: "",
+      lastSyncAt: null,
+    });
     persistSession({ ...get() });
+    // git-synk aktiveres kun, hvis mappen er et repo; første synk henter
+    // ændringer fra GitHub med det samme
+    try {
+      const isRepo = await fsApi.gitInfo(path);
+      if (get().folder !== path) return; // mappen blev skiftet imens
+      set({ gitRepo: isRepo });
+      if (isRepo) void get().syncNow();
+    } catch {
+      // uden git-info forbliver synk slået fra
+    }
   },
 
   refreshFiles: async () => {
@@ -227,7 +266,10 @@ export const useStore = create<Store>((set, get) => ({
     const doc = docs[path];
     if (doc && doc.dirty && !doc.conflict && !doc.missing) {
       // gem synkront-ish før fanen lukkes
-      fsApi.writeFile(path, doc.content).catch(() => {});
+      fsApi
+        .writeFile(path, doc.content)
+        .then(() => get().scheduleSync())
+        .catch(() => {});
     }
     const idx = tabs.indexOf(path);
     const nextTabs = tabs.filter((t) => t !== path);
@@ -275,12 +317,15 @@ export const useStore = create<Store>((set, get) => ({
           },
         },
       });
+      get().scheduleSync();
     } catch {
       // beholder dirty; næste redigering forsøger igen
     }
   },
 
   handleFsChange: async (paths: string[]) => {
+    // eksterne ændringer (Claude) skal også committes og pushes
+    get().scheduleSync();
     // opdater fillisten (debounced), uanset hvad der skete
     if (refreshTimer) window.clearTimeout(refreshTimer);
     refreshTimer = window.setTimeout(() => {
@@ -366,6 +411,7 @@ export const useStore = create<Store>((set, get) => ({
             },
           });
         }
+        get().scheduleSync();
       } catch {
         // beholder dirty
       }
@@ -406,6 +452,7 @@ export const useStore = create<Store>((set, get) => ({
     });
     try {
       await fsApi.writeFile(path, restored);
+      get().scheduleSync();
     } catch {
       // næste redigering gemmer igen
     }
@@ -443,6 +490,7 @@ export const useStore = create<Store>((set, get) => ({
     const path = await fsApi.createFile(dir, title);
     await get().refreshFiles();
     await get().openFile(path);
+    get().scheduleSync();
   },
 
   newFolder: async (name: string) => {
@@ -471,11 +519,53 @@ export const useStore = create<Store>((set, get) => ({
     });
     await get().refreshFiles();
     persistSession({ ...get() });
+    get().scheduleSync();
   },
 
   removeNote: async (path: string) => {
     await fsApi.deleteFile(path);
     if (get().tabs.includes(path)) get().closeTab(path);
     await get().refreshFiles();
+    get().scheduleSync();
+  },
+
+  scheduleSync: () => {
+    if (!get().gitRepo) return;
+    if (syncTimer) window.clearTimeout(syncTimer);
+    syncTimer = window.setTimeout(() => {
+      syncTimer = null;
+      void get().syncNow();
+    }, SYNC_DEBOUNCE_MS);
+  },
+
+  syncNow: async () => {
+    const { folder, gitRepo } = get();
+    if (!folder || !gitRepo) return;
+    if (syncTimer) {
+      window.clearTimeout(syncTimer);
+      syncTimer = null;
+    }
+    if (syncRunning) {
+      syncQueued = true;
+      return;
+    }
+    syncRunning = true;
+    set({ syncStatus: "syncing" });
+    try {
+      const res = await fsApi.gitSync(folder);
+      set({
+        syncStatus: res.status,
+        syncDetail: res.detail,
+        lastSyncAt: res.status === "ok" ? Date.now() : get().lastSyncAt,
+      });
+    } catch (e) {
+      set({ syncStatus: "error", syncDetail: String(e) });
+    } finally {
+      syncRunning = false;
+      if (syncQueued) {
+        syncQueued = false;
+        get().scheduleSync();
+      }
+    }
   },
 }));

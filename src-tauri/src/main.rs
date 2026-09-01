@@ -172,6 +172,153 @@ fn delete_file(path: String) -> Result<(), String> {
     trash::delete(&path).map_err(|e| e.to_string())
 }
 
+// ---------- Git-synk ----------
+// Vaulten kan være et git-repo (GitHub ejer noterne). Appen synker ved at
+// skygge det, obsidian-git gjorde: stage → commit → pull --rebase → push.
+// Alt kører via systemets git, så eksisterende SSH-opsætning genbruges.
+
+#[derive(Serialize)]
+struct GitSyncResult {
+    status: String, // "ok" | "offline" | "conflict" | "error"
+    committed: usize,
+    detail: String,
+}
+
+fn git(dir: &str, args: &[&str]) -> Result<std::process::Output, String> {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        // hæng aldrig på en prompt — fejl i stedet, så UI'et kan vise det
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes")
+        .output()
+        .map_err(|e| format!("git kunne ikke startes: {}", e))
+}
+
+fn git_text(out: &std::process::Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    )
+}
+
+fn looks_offline(text: &str) -> bool {
+    [
+        "Could not resolve host",
+        "unable to access",
+        "Could not read from remote",
+        "Connection refused",
+        "Connection timed out",
+        "Operation timed out",
+        "Network is unreachable",
+        "ssh: connect to host",
+    ]
+    .iter()
+    .any(|m| text.contains(m))
+}
+
+#[tauri::command]
+async fn git_info(path: String) -> Result<bool, String> {
+    let out = git(&path, &["rev-parse", "--is-inside-work-tree"])?;
+    Ok(out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == "true")
+}
+
+#[tauri::command]
+async fn git_sync(path: String) -> Result<GitSyncResult, String> {
+    let fail = |detail: String| GitSyncResult {
+        status: "error".into(),
+        committed: 0,
+        detail,
+    };
+
+    // stage alt — undtagen editorens midlertidige skrivefiler og
+    // obsidian-git's credentials-fil, som aldrig må ende på GitHub
+    let add = git(
+        &path,
+        &[
+            "add",
+            "-A",
+            "--",
+            ".",
+            ":(exclude,glob)**/.*.writing",
+            ":(exclude,glob)**/.git_credentials_input",
+        ],
+    )?;
+    if !add.status.success() {
+        return Ok(fail(git_text(&add)));
+    }
+
+    let staged = git(&path, &["diff", "--cached", "--name-only"])?;
+    let files: Vec<String> = String::from_utf8_lossy(&staged.stdout)
+        .lines()
+        .map(|l| l.to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    let committed = files.len();
+
+    if committed > 0 {
+        let mut names: Vec<String> = files
+            .iter()
+            .take(3)
+            .map(|f| {
+                let base = f.rsplit('/').next().unwrap_or(f);
+                base.strip_suffix(".md").unwrap_or(base).to_string()
+            })
+            .collect();
+        if committed > 3 {
+            names.push(format!("(+{} flere)", committed - 3));
+        }
+        let msg = format!("Noter: {}", names.join(", "));
+        let commit = git(&path, &["commit", "-m", &msg])?;
+        if !commit.status.success() {
+            return Ok(fail(git_text(&commit)));
+        }
+    }
+
+    let pull = git(&path, &["pull", "--rebase"])?;
+    if !pull.status.success() {
+        let text = git_text(&pull);
+        if looks_offline(&text) {
+            return Ok(GitSyncResult {
+                status: "offline".into(),
+                committed,
+                detail: text,
+            });
+        }
+        // efterlad aldrig repoet midt i en rebase
+        let _ = git(&path, &["rebase", "--abort"]);
+        let status = if text.contains("CONFLICT") || text.contains("could not apply") {
+            "conflict"
+        } else {
+            "error"
+        };
+        return Ok(GitSyncResult {
+            status: status.into(),
+            committed,
+            detail: text,
+        });
+    }
+
+    let push = git(&path, &["push"])?;
+    if !push.status.success() {
+        let text = git_text(&push);
+        let status = if looks_offline(&text) { "offline" } else { "error" };
+        return Ok(GitSyncResult {
+            status: status.into(),
+            committed,
+            detail: text,
+        });
+    }
+
+    Ok(GitSyncResult {
+        status: "ok".into(),
+        committed,
+        detail: String::new(),
+    })
+}
+
 #[tauri::command]
 fn frontend_ready(state: State<OpenState>) -> Vec<String> {
     state.ready.store(true, Ordering::SeqCst);
@@ -226,6 +373,8 @@ fn main() {
             rename_file,
             delete_file,
             watch_folder,
+            git_info,
+            git_sync,
             frontend_ready
         ])
         .build(tauri::generate_context!())

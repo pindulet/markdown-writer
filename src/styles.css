@@ -338,6 +338,50 @@ button {
   color: var(--text-muted);
 }
 
+.sync-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 2px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.sync-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+
+.sync-btn.warn {
+  color: var(--accent);
+}
+
+.sync-btn svg {
+  flex-shrink: 0;
+}
+
+.sync-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sync-spin {
+  animation: sync-rotate 1s linear infinite;
+}
+
+@keyframes sync-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ---------- Hovedkolonne ---------- */
 
 .main {

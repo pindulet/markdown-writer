@@ -18,6 +18,12 @@ export interface FolderListing {
   dirs: string[]; // alle undermapper som relative stier, også tomme
 }
 
+export interface GitSyncResult {
+  status: "ok" | "offline" | "conflict" | "error";
+  committed: number;
+  detail: string;
+}
+
 interface Backend {
   listFolder(path: string): Promise<FolderListing>;
   readFile(path: string): Promise<string>;
@@ -28,6 +34,8 @@ interface Backend {
   renameFile(path: string, newName: string): Promise<string>;
   deleteFile(path: string): Promise<void>;
   watchFolder(path: string): Promise<void>;
+  gitInfo(path: string): Promise<boolean>;
+  gitSync(path: string): Promise<GitSyncResult>;
   pickFolder(): Promise<string | null>;
   openUrl(url: string): Promise<void>;
   onFsChange(cb: (paths: string[]) => void): () => void;
@@ -74,6 +82,14 @@ function createTauriBackend(): Backend {
     watchFolder: async (path) => {
       const { invoke } = await import("@tauri-apps/api/core");
       return invoke<void>("watch_folder", { path });
+    },
+    gitInfo: async (path) => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<boolean>("git_info", { path });
+    },
+    gitSync: async (path) => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<GitSyncResult>("git_sync", { path });
     },
     pickFolder: async () => {
       const { open } = await import("@tauri-apps/plugin-dialog");
@@ -139,6 +155,10 @@ function createMockBackend(): Backend {
   const subs = new Set<(paths: string[]) => void>();
   const emit = (paths: string[]) => subs.forEach((cb) => cb(paths));
 
+  // I browseren simuleres git-synk. `window.mockSyncStatus = "offline"`
+  // tvinger en fejltilstand, så UI'et kan testes.
+  let pendingChanges = 0;
+
   (window as unknown as Record<string, unknown>).claudeWrite = (
     path: string,
     content: string
@@ -170,6 +190,7 @@ function createMockBackend(): Backend {
     },
     writeFile: async (path, content) => {
       files.set(path, content);
+      pendingChanges += 1;
       emit([path]);
     },
     createFile: async (dir, name) => {
@@ -208,6 +229,17 @@ function createMockBackend(): Backend {
       emit([path]);
     },
     watchFolder: async () => {},
+    gitInfo: async () => true,
+    gitSync: async () => {
+      await new Promise((r) => setTimeout(r, 600));
+      const forced = (window as unknown as Record<string, unknown>).mockSyncStatus;
+      const committed = pendingChanges;
+      pendingChanges = 0;
+      if (forced === "offline" || forced === "conflict" || forced === "error") {
+        return { status: forced, committed, detail: "Simuleret fejl" };
+      }
+      return { status: "ok", committed, detail: "" };
+    },
     pickFolder: async () => ROOT,
     openUrl: async (url) => {
       window.open(url, "_blank");
@@ -237,6 +269,8 @@ export function resolveAsset(absPath: string): string {
 export const renameFile = backend.renameFile;
 export const deleteFile = backend.deleteFile;
 export const watchFolder = backend.watchFolder;
+export const gitInfo = backend.gitInfo;
+export const gitSync = backend.gitSync;
 export const pickFolder = backend.pickFolder;
 export const openUrl = backend.openUrl;
 export const onFsChange = backend.onFsChange;
