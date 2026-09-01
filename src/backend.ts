@@ -148,7 +148,10 @@ function createMockBackend(): Backend {
     ],
     [`${ROOT}/Produktideer.md`, `# Produktideer\n\n- Skriv den første ned her.\n`],
     [`${ROOT}/Dagbog/Uge 35 2026.md`, `# Uge 35 2026\n\nUgen hvor editoren blev bygget.\n`],
-    [`${ROOT}/Projekter/Markdown writer.md`, `# Markdown writer\n\nStatus og næste skridt.\n`],
+    [
+      `${ROOT}/Projekter/Markdown writer.md`,
+      `# Markdown writer\n\nStatus og næste skridt.\n\n| Navn | Rolle | Status |\n| --- | --- | --- |\n| Szymon | Back-end | Mangler afklaring |\n| Nawojka | QA | Kan stoppe |\n`,
+    ],
     [`${ROOT}/Projekter/Arkiv/Gammel idé.md`, `# Gammel idé\n\nParkeret.\n`],
   ]);
   const mockDirs = new Set<string>(["Dagbog", "Projekter", "Projekter/Arkiv"]);

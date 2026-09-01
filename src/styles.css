@@ -787,6 +787,51 @@ button {
   margin: 0;
 }
 
+/* Tabeller */
+.layout-content .tableWrapper {
+  margin: 0 0 14px;
+  overflow-x: auto;
+}
+
+.layout-content table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 15.5px;
+}
+
+.layout-content th,
+.layout-content td {
+  border: 1px solid var(--hairline);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  min-width: 48px;
+  position: relative;
+}
+
+.layout-content th {
+  font-weight: 600;
+  color: var(--text-strong);
+  background: var(--bg-segment);
+}
+
+.layout-content th p,
+.layout-content td p {
+  margin: 0;
+}
+
+.layout-content .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--accent-soft);
+  pointer-events: none;
+}
+
+.layout-content .column-resize-handle {
+  display: none;
+}
+
 /* Tjeklister (- [ ] / - [x]) */
 .layout-content ul[data-type="taskList"] {
   list-style: none;

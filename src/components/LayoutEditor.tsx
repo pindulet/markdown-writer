@@ -7,6 +7,10 @@ import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
 
 // Uden en tight-attribut serialiserer tiptap-markdown tjeklister med
 // blanke linjer mellem punkterne; punktlister har attributten indbygget.
@@ -54,10 +58,12 @@ const EditorShortcuts = Extension.create({
       Tab: () =>
         this.editor.chain().focus().sinkListItem("listItem").run() ||
         this.editor.chain().focus().sinkListItem("taskItem").run() ||
+        this.editor.commands.goToNextCell() ||
         true,
       "Shift-Tab": () =>
         this.editor.chain().focus().liftListItem("listItem").run() ||
         this.editor.chain().focus().liftListItem("taskItem").run() ||
+        this.editor.commands.goToPreviousCell() ||
         true,
     };
     for (let level = 1; level <= 6; level++) {
@@ -133,6 +139,10 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
       VaultImage.configure({ allowBase64: true }),
       TightTaskList,
       TaskItem.configure({ nested: true }),
+      Table,
+      TableRow,
+      TableCell,
+      TableHeader,
       Link.configure({ openOnClick: false, autolink: true }),
       Markdown.configure({
         html: false,
@@ -248,6 +258,40 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
               )
               .run(),
         },
+        ...(editor.isActive("table")
+          ? [
+              {
+                label: "Række under",
+                action: () => editor.chain().focus().addRowAfter().run(),
+              },
+              {
+                label: "Kolonne til højre",
+                action: () => editor.chain().focus().addColumnAfter().run(),
+              },
+              {
+                label: "Slet række",
+                action: () => editor.chain().focus().deleteRow().run(),
+              },
+              {
+                label: "Slet kolonne",
+                action: () => editor.chain().focus().deleteColumn().run(),
+              },
+              {
+                label: "Slet tabel",
+                action: () => editor.chain().focus().deleteTable().run(),
+              },
+            ]
+          : [
+              {
+                label: "Tabel",
+                action: () =>
+                  editor
+                    .chain()
+                    .focus()
+                    .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+                    .run(),
+              },
+            ]),
         { label: "Link …", action: () => setLinkOpen(true) },
       ]
     : [];
@@ -277,8 +321,10 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
         }
       }}
       onContextMenu={(e) => {
-        // uden markering: lad systemets menu (med staveforslag) vinde
-        if (!editor || editor.state.selection.empty) return;
+        // uden markering: lad systemets menu (med staveforslag) vinde —
+        // undtagen i tabeller, hvor menuen har række/kolonne-handlinger
+        if (!editor) return;
+        if (editor.state.selection.empty && !editor.isActive("table")) return;
         e.preventDefault();
         setMenu({ x: e.clientX, y: e.clientY });
       }}
