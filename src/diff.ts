@@ -30,10 +30,7 @@ export function splitBlocks(md: string): Block[] {
   return blocks;
 }
 
-// Indeks (i den nye version) på blokke, der ikke findes uændret i den gamle.
-export function changedBlockIndices(prev: string, next: string): number[] {
-  const a = splitBlocks(prev).map((b) => b.text.trim());
-  const b = splitBlocks(next).map((bl) => bl.text.trim());
+function lcsTable(a: string[], b: string[]): number[][] {
   const m = a.length;
   const n = b.length;
   const dp: number[][] = Array.from({ length: m + 1 }, () =>
@@ -44,6 +41,16 @@ export function changedBlockIndices(prev: string, next: string): number[] {
       dp[i][j] = a[i] === b[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
     }
   }
+  return dp;
+}
+
+// Indeks (i den nye version) på blokke, der ikke findes uændret i den gamle.
+export function changedBlockIndices(prev: string, next: string): number[] {
+  const a = splitBlocks(prev).map((b) => b.text.trim());
+  const b = splitBlocks(next).map((bl) => bl.text.trim());
+  const m = a.length;
+  const n = b.length;
+  const dp = lcsTable(a, b);
   const changed: number[] = [];
   let i = 0;
   let j = 0;
@@ -63,4 +70,77 @@ export function changedBlockIndices(prev: string, next: string): number[] {
     j++;
   }
   return changed;
+}
+
+// For hver blok i a: indekset på dens uændrede makker i b, ellers -1.
+// Matchene er strengt stigende (LCS), så de kan bruges som ankre.
+function lcsMatch(a: string[], b: string[]): number[] {
+  const dp = lcsTable(a, b);
+  const map = new Array<number>(a.length).fill(-1);
+  let i = 0;
+  let j = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      map[i] = j;
+      i++;
+      j++;
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      i++;
+    } else {
+      j++;
+    }
+  }
+  return map;
+}
+
+// Trevejs-fletning på blokniveau. Blokke, der kun er ændret i den ene
+// version, tages derfra; er samme område ændret i begge, beholdes begge
+// (min version først), så intet går tabt.
+export function mergeThreeWay(base: string, mine: string, theirs: string): string {
+  const blocksBase = splitBlocks(base).map((b) => b.text);
+  const blocksMine = splitBlocks(mine).map((b) => b.text);
+  const blocksTheirs = splitBlocks(theirs).map((b) => b.text);
+  const trimmed = (arr: string[]) => arr.map((s) => s.trim());
+  const mapMine = lcsMatch(trimmed(blocksBase), trimmed(blocksMine));
+  const mapTheirs = lcsMatch(trimmed(blocksBase), trimmed(blocksTheirs));
+
+  const out: string[] = [];
+  let pm = 0; // næste uforbrugte blok i mine
+  let pt = 0; // næste uforbrugte blok i theirs
+  const sameText = (x: string[], y: string[]) =>
+    trimmed(x).join("\n\n") === trimmed(y).join("\n\n");
+
+  const emitSegment = (mineSeg: string[], theirsSeg: string[], baseSeg: string[]) => {
+    if (sameText(mineSeg, theirsSeg)) {
+      out.push(...mineSeg);
+    } else if (sameText(mineSeg, baseSeg)) {
+      out.push(...theirsSeg); // kun ændret på disken
+    } else if (sameText(theirsSeg, baseSeg)) {
+      out.push(...mineSeg); // kun ændret af mig
+    } else {
+      out.push(...mineSeg, ...theirsSeg); // ændret begge steder: behold begge
+    }
+  };
+
+  let baseSeg: string[] = [];
+  for (let i = 0; i < blocksBase.length; i++) {
+    if (mapMine[i] !== -1 && mapTheirs[i] !== -1) {
+      // anker: blokken er uændret i begge versioner
+      emitSegment(
+        blocksMine.slice(pm, mapMine[i]),
+        blocksTheirs.slice(pt, mapTheirs[i]),
+        baseSeg
+      );
+      out.push(blocksMine[mapMine[i]]);
+      pm = mapMine[i] + 1;
+      pt = mapTheirs[i] + 1;
+      baseSeg = [];
+    } else {
+      baseSeg.push(blocksBase[i]);
+    }
+  }
+  emitSegment(blocksMine.slice(pm), blocksTheirs.slice(pt), baseSeg);
+
+  const trailing = mine.endsWith("\n") || theirs.endsWith("\n") ? "\n" : "";
+  return out.join("\n\n") + trailing;
 }

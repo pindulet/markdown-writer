@@ -14,9 +14,16 @@ export default function Banners({ doc }: { doc: Doc }) {
         <span className="flex-spacer" />
         <button
           className="banner-btn strong"
+          title="Flet begge versioner — Claudes ændringer fremhæves bagefter"
+          onClick={() => void useStore.getState().mergeConflict(doc.path)}
+        >
+          Kombinér
+        </button>
+        <button
+          className="banner-btn"
           onClick={() => void useStore.getState().resolveConflict(doc.path, true)}
         >
-          Behold min version
+          Behold min
         </button>
         <button
           className="banner-btn"

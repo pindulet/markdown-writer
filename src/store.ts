@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import * as fsApi from "./backend";
+import { mergeThreeWay } from "./diff";
 
 export type ViewMode = "markdown" | "layout";
 
@@ -9,6 +10,7 @@ export type SyncStatus = "syncing" | "ok" | "offline" | "conflict" | "error" | n
 export interface Doc {
   path: string;
   content: string;
+  baseContent: string; // seneste indhold, editor og disk var enige om (til fletning)
   dirty: boolean;
   claudeUpdated: boolean; // ekstern ændring, endnu ikke set (prik på fane/fil)
   showExternalBanner: boolean;
@@ -50,6 +52,7 @@ interface Store {
   saveNow: (path: string) => Promise<void>;
   handleFsChange: (paths: string[]) => Promise<void>;
   resolveConflict: (path: string, keepMine: boolean) => Promise<void>;
+  mergeConflict: (path: string) => Promise<void>;
   undoExternal: (path: string) => Promise<void>;
   dismissExternalBanner: (path: string) => void;
   setView: (view: ViewMode) => void;
@@ -69,6 +72,17 @@ interface Store {
 const saveTimers = new Map<string, number>();
 let refreshTimer: number | null = null;
 
+// Seneste indhold, vi selv har skrevet pr. fil. Watcher-events for vores
+// egne skrivninger kan ankomme, EFTER brugeren har tastet videre — uden
+// dette register ville appens eget gem ligne en ekstern ændring og give
+// en falsk konflikt.
+const lastWritten = new Map<string, string>();
+
+async function writeOwn(path: string, content: string): Promise<void> {
+  lastWritten.set(path, content);
+  await fsApi.writeFile(path, content);
+}
+
 // Git-synk: kør aldrig to synk samtidig; ændringer under en kørende synk
 // udløser én opfølgende. Debounce samler skriverier i ét commit.
 const SYNC_DEBOUNCE_MS = 20_000;
@@ -80,6 +94,7 @@ function newDoc(path: string, content: string): Doc {
   return {
     path,
     content,
+    baseContent: content,
     dirty: false,
     claudeUpdated: false,
     showExternalBanner: false,
@@ -266,8 +281,7 @@ export const useStore = create<Store>((set, get) => ({
     const doc = docs[path];
     if (doc && doc.dirty && !doc.conflict && !doc.missing) {
       // gem synkront-ish før fanen lukkes
-      fsApi
-        .writeFile(path, doc.content)
+      writeOwn(path, doc.content)
         .then(() => get().scheduleSync())
         .catch(() => {});
     }
@@ -304,7 +318,7 @@ export const useStore = create<Store>((set, get) => ({
     // gem aldrig hen over en uafklaret konflikt
     if (!doc || !doc.dirty || doc.conflict || doc.missing) return;
     try {
-      await fsApi.writeFile(path, doc.content);
+      await writeOwn(path, doc.content);
       const current = get().docs[path];
       if (!current) return;
       set({
@@ -313,6 +327,7 @@ export const useStore = create<Store>((set, get) => ({
           [path]: {
             ...current,
             dirty: current.content !== doc.content,
+            baseContent: doc.content,
             lastSavedAt: Date.now(),
           },
         },
@@ -350,8 +365,9 @@ export const useStore = create<Store>((set, get) => ({
       }
       const fresh = get().docs[path];
       if (!fresh) continue;
-      if (disk === fresh.content) {
-        // vores eget gem (eller ingen reel ændring)
+      if (disk === fresh.content || disk === lastWritten.get(path)) {
+        // vores eget gem (eller ingen reel ændring) — også når brugeren
+        // har tastet videre, inden watcher-eventet nåede frem
         if (fresh.missing) {
           set({ docs: { ...get().docs, [path]: { ...fresh, missing: false } } });
         }
@@ -369,6 +385,7 @@ export const useStore = create<Store>((set, get) => ({
               ...fresh,
               prevContent: fresh.content,
               content: disk,
+              baseContent: disk,
               missing: false,
               claudeUpdated: !isActive,
               showExternalBanner: true,
@@ -397,7 +414,7 @@ export const useStore = create<Store>((set, get) => ({
         docs: { ...get().docs, [path]: { ...doc, conflict: null, dirty: true } },
       });
       try {
-        await fsApi.writeFile(path, mine);
+        await writeOwn(path, mine);
         const current = get().docs[path];
         if (current) {
           set({
@@ -406,6 +423,7 @@ export const useStore = create<Store>((set, get) => ({
               [path]: {
                 ...current,
                 dirty: current.content !== mine,
+                baseContent: mine,
                 lastSavedAt: Date.now(),
               },
             },
@@ -423,6 +441,7 @@ export const useStore = create<Store>((set, get) => ({
             ...doc,
             prevContent: doc.content,
             content: doc.conflict,
+            baseContent: doc.conflict,
             conflict: null,
             dirty: false,
             showExternalBanner: true,
@@ -430,6 +449,41 @@ export const useStore = create<Store>((set, get) => ({
           },
         },
       });
+    }
+  },
+
+  // Kombinér: trevejs-fletning af mine ugemte ændringer og diskens
+  // version, med seneste fælles indhold som udgangspunkt. Resultatet
+  // skrives til disken, og de indkomne blokke fremhæves som eksterne.
+  mergeConflict: async (path: string) => {
+    const doc = get().docs[path];
+    if (!doc || doc.conflict === null) return;
+    const mine = doc.content;
+    const merged = mergeThreeWay(doc.baseContent, mine, doc.conflict);
+    set({
+      docs: {
+        ...get().docs,
+        [path]: {
+          ...doc,
+          prevContent: mine,
+          content: merged,
+          baseContent: merged,
+          conflict: null,
+          dirty: false,
+          showExternalBanner: true,
+          lastExternalAt: Date.now(),
+        },
+      },
+    });
+    try {
+      await writeOwn(path, merged);
+      get().scheduleSync();
+    } catch {
+      // næste redigering gemmer igen
+      const current = get().docs[path];
+      if (current) {
+        set({ docs: { ...get().docs, [path]: { ...current, dirty: true } } });
+      }
     }
   },
 
@@ -443,6 +497,7 @@ export const useStore = create<Store>((set, get) => ({
         [path]: {
           ...doc,
           content: restored,
+          baseContent: restored,
           prevContent: null,
           showExternalBanner: false,
           claudeUpdated: false,
@@ -451,7 +506,7 @@ export const useStore = create<Store>((set, get) => ({
       },
     });
     try {
-      await fsApi.writeFile(path, restored);
+      await writeOwn(path, restored);
       get().scheduleSync();
     } catch {
       // næste redigering gemmer igen
