@@ -10,6 +10,8 @@ const SHORTCUTS: Array<[string, string]> = [
   ["⌘0", "Brødtekst (fjern overskrift)"],
   ["Tab / ⇧Tab", "Ryk ind / ryk ud (lister)"],
   ["⌘Z / ⇧⌘Z", "Fortryd / annullér fortryd"],
+  ["⌘+ / ⌘−", "Zoom tekst ind/ud"],
+  ["⇧⌘0", "Nulstil zoom"],
   ["⌘/", "Vis denne oversigt"],
   ["⌘-klik på link", "Åbn link i browseren"],
   ["Højreklik på markering", "Formateringsmenu"],

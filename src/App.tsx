@@ -86,6 +86,16 @@ export default function App() {
       } else if (e.key === "/") {
         e.preventDefault();
         s.setShortcutsOpen(!s.shortcutsOpen);
+      } else if (e.key === "+" || (e.key === "=" && !e.shiftKey)) {
+        // "=" er plus-tasten uden shift på amerikansk layout
+        e.preventDefault();
+        s.setZoom(s.zoom + 0.1);
+      } else if (e.key === "-") {
+        e.preventDefault();
+        s.setZoom(s.zoom - 0.1);
+      } else if (e.code === "Digit0" && e.shiftKey) {
+        e.preventDefault();
+        s.setZoom(1);
       }
     };
     window.addEventListener("keydown", onKey);

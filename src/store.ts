@@ -39,6 +39,7 @@ interface Store {
   syncStatus: SyncStatus;
   syncDetail: string;
   lastSyncAt: number | null;
+  zoom: number; // skalering af editortekst, 1 = normal
 
   init: () => Promise<void>;
   setFolder: (path: string) => Promise<void>;
@@ -61,6 +62,7 @@ interface Store {
   setNewNoteOpen: (open: boolean, dir?: string) => void;
   setNewFolderParent: (parent: string | null) => void;
   setShortcutsOpen: (open: boolean) => void;
+  setZoom: (zoom: number) => void;
   newNote: (name: string, relDir: string) => Promise<void>;
   newFolder: (name: string) => Promise<void>;
   renameNote: (path: string, newName: string) => Promise<void>;
@@ -140,6 +142,7 @@ export const useStore = create<Store>((set, get) => ({
   syncStatus: null,
   syncDetail: "",
   lastSyncAt: null,
+  zoom: 1,
 
   init: async () => {
     let folder: string | null = null;
@@ -152,6 +155,8 @@ export const useStore = create<Store>((set, get) => ({
       active = localStorage.getItem("mw.active") || null;
       const v = localStorage.getItem("mw.view");
       if (v === "markdown" || v === "layout") view = v;
+      const z = Number(localStorage.getItem("mw.zoom"));
+      if (z >= 0.7 && z <= 1.6) get().setZoom(z);
     } catch {
       // ignorer korrupt session
     }
@@ -536,6 +541,18 @@ export const useStore = create<Store>((set, get) => ({
   setNewFolderParent: (parent: string | null) => set({ newFolderParent: parent }),
 
   setShortcutsOpen: (open: boolean) => set({ shortcutsOpen: open }),
+
+  setZoom: (zoom: number) => {
+    // afrundes til ét decimal, så gentagne tryk ikke driver i flydende tal
+    const clamped = Math.round(Math.min(1.6, Math.max(0.7, zoom)) * 10) / 10;
+    set({ zoom: clamped });
+    document.documentElement.style.setProperty("--editor-zoom", String(clamped));
+    try {
+      localStorage.setItem("mw.zoom", String(clamped));
+    } catch {
+      // ikke kritisk
+    }
+  },
 
   newNote: async (name: string, relDir: string) => {
     const { folder } = get();
