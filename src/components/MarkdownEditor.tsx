@@ -19,6 +19,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { useStore, type Doc } from "../store";
+import { getScroll, saveScroll } from "../scrollMemory";
 import { changedBlockIndices, splitBlocks } from "../diff";
 import { saveClipboardImage } from "../images";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
@@ -267,7 +268,19 @@ export default function MarkdownEditor({ doc }: { doc: Doc }) {
     });
     viewRef.current = view;
     view.focus();
+    // gendan scrollposition fra sidst fanen var åben; rAF venter på
+    // CodeMirrors første layout, så positionen ikke bliver klippet
+    const saved = getScroll(path, "markdown");
+    if (saved !== undefined) {
+      requestAnimationFrame(() => {
+        view.scrollDOM.scrollTop = saved;
+      });
+    }
+    const onScroll = () => saveScroll(path, "markdown", view.scrollDOM.scrollTop);
+    view.scrollDOM.addEventListener("scroll", onScroll, { passive: true });
     return () => {
+      saveScroll(path, "markdown", view.scrollDOM.scrollTop);
+      view.scrollDOM.removeEventListener("scroll", onScroll);
       viewRef.current = null;
       view.destroy();
     };

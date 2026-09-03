@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, Extension, type Editor } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
@@ -31,6 +31,7 @@ const TightTaskList = TaskList.extend({
 import { Markdown } from "tiptap-markdown";
 import { openUrl } from "../backend";
 import { useStore, type Doc } from "../store";
+import { getScroll, saveScroll } from "../scrollMemory";
 import { changedBlockIndices, splitBlocks } from "../diff";
 import { resolveImageSrc, saveClipboardImage } from "../images";
 import { MarkdownExtras } from "./markdownExtras";
@@ -127,6 +128,7 @@ function getMarkdown(editor: Editor): string {
 
 export default function LayoutEditor({ doc }: { doc: Doc }) {
   const path = doc.path;
+  const rootRef = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
 
@@ -186,6 +188,26 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
       useStore.getState().editContent(path, getMarkdown(editor));
     },
   });
+
+  // gendan scrollposition fra sidst fanen var åben og gem den løbende;
+  // rAF venter på første layout (og på autofocus, der ellers ville vinde)
+  useEffect(() => {
+    if (!editor) return;
+    const scroller = rootRef.current?.querySelector<HTMLElement>(".layout-scroll");
+    if (!scroller) return;
+    const saved = getScroll(path, "layout");
+    if (saved !== undefined) {
+      requestAnimationFrame(() => {
+        scroller.scrollTop = saved;
+      });
+    }
+    const onScroll = () => saveScroll(path, "layout", scroller.scrollTop);
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      saveScroll(path, "layout", scroller.scrollTop);
+      scroller.removeEventListener("scroll", onScroll);
+    };
+  }, [editor, path]);
 
   // ekstern opdatering (Claude) skrives ind i editoren
   useEffect(() => {
@@ -299,6 +321,7 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
   return (
     <div
       className="layout-editor"
+      ref={rootRef}
       onKeyDown={(e) => {
         if (e.metaKey && !e.ctrlKey && !e.altKey && e.key === "k") {
           e.preventDefault();
