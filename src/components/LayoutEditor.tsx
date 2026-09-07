@@ -11,6 +11,34 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
+import HardBreak from "@tiptap/extension-hard-break";
+
+// tiptap-markdowns egen hardBreak-serialisering falder tilbage til HTML i
+// tabelceller, hvilket med html:false bliver til det bogstavelige "[hardBreak]"
+// i filen. Et rigtigt linjeskift ville knække rækken, så i tabeller bliver
+// linjeskift til et mellemrum.
+const TableSafeHardBreak = HardBreak.extend({
+  addStorage() {
+    return {
+      markdown: {
+        serialize(
+          state: { inTable?: boolean; write: (s: string) => void },
+          node: { type: unknown },
+          parent: { childCount: number; child: (i: number) => { type: unknown } },
+          index: number
+        ) {
+          for (let i = index + 1; i < parent.childCount; i++) {
+            if (parent.child(i).type !== node.type) {
+              state.write(state.inTable ? " " : "\\\n");
+              return;
+            }
+          }
+        },
+        parse: {},
+      },
+    };
+  },
+});
 
 // Uden en tight-attribut serialiserer tiptap-markdown tjeklister med
 // blanke linjer mellem punkterne; punktlister har attributten indbygget.
@@ -35,6 +63,7 @@ import { getScroll, saveScroll } from "../scrollMemory";
 import { changedBlockIndices, splitBlocks } from "../diff";
 import { resolveImageSrc, saveClipboardImage } from "../images";
 import { MarkdownExtras } from "./markdownExtras";
+import { GhostSuggest } from "./ghostSuggest";
 
 // Billeder gemmes med relativ sti i markdown; kun visningen slås op
 // gennem asset-protokollen.
@@ -53,9 +82,22 @@ import LinkDialog from "./LinkDialog";
 // Tab sluges altid, så fokus ikke hopper ud af editoren.
 const EditorShortcuts = Extension.create({
   name: "editorShortcuts",
+  // over kernens Enter-håndtering, så tabel-reglerne nedenfor vinder
+  priority: 1000,
   addKeyboardShortcuts() {
     const shortcuts: Record<string, () => boolean> = {
       "Mod-0": () => this.editor.chain().focus().setParagraph().run(),
+      // Enter i en tabelcelle må aldrig dele cellen i afsnit — det knækker
+      // GFM-rækken på disken. Hop til næste celle i stedet (ny række til sidst).
+      Enter: () => {
+        if (!this.editor.isActive("table")) return false;
+        return (
+          this.editor.commands.goToNextCell() ||
+          this.editor.chain().focus().addRowAfter().goToNextCell().run() ||
+          true
+        );
+      },
+      "Shift-Enter": () => this.editor.isActive("table"),
       Tab: () =>
         this.editor.chain().focus().sinkListItem("listItem").run() ||
         this.editor.chain().focus().sinkListItem("taskItem").run() ||
@@ -123,7 +165,10 @@ const ClaudeHighlight = Extension.create({
 });
 
 function getMarkdown(editor: Editor): string {
-  return (editor.storage as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
+  const md = (editor.storage as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
+  // serialiseringen escaper alle kantparenteser, hvilket ødelægger
+  // wikilinks og indlejrede billeder: \[\[Note\]\] → [[Note]]
+  return md.replace(/(!?)\\\[\\\[([^\][\n]*?)\\\]\\\]/g, "$1[[$2]]");
 }
 
 export default function LayoutEditor({ doc }: { doc: Doc }) {
@@ -134,10 +179,12 @@ export default function LayoutEditor({ doc }: { doc: Doc }) {
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({ hardBreak: false }),
+      TableSafeHardBreak,
       EditorShortcuts,
       ClaudeHighlight,
       MarkdownExtras,
+      GhostSuggest.configure({ path }),
       VaultImage.configure({ allowBase64: true }),
       TightTaskList,
       TaskItem.configure({ nested: true }),
