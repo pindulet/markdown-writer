@@ -24,6 +24,7 @@ import { changedBlockIndices, splitBlocks } from "../diff";
 import { saveClipboardImage } from "../images";
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import LinkDialog from "./LinkDialog";
+import { ghostText } from "./ghostText";
 
 // [[Wikilinks]] fremhæves og kan ⌘-klikkes
 const wikilinkMatcher = new MatchDecorator({
@@ -248,6 +249,7 @@ export default function MarkdownEditor({ doc }: { doc: Doc }) {
           markdown(),
           EditorView.lineWrapping,
           syntaxHighlighting(mdHighlight),
+          ghostText(path),
           claudeHighlightField,
           wikilinkPlugin,
           editorEvents,

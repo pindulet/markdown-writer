@@ -26,6 +26,7 @@ export default function App() {
   const newNoteOpen = useStore((s) => s.newNoteOpen);
   const newFolderParent = useStore((s) => s.newFolderParent);
   const shortcutsOpen = useStore((s) => s.shortcutsOpen);
+  const aiKeyDialogOpen = useStore((s) => s.aiKeyDialogOpen);
 
   useEffect(() => {
     void useStore
@@ -96,6 +97,10 @@ export default function App() {
       } else if (e.code === "Digit0" && e.shiftKey) {
         e.preventDefault();
         s.setZoom(1);
+      } else if (e.key.toLowerCase() === "j" && e.shiftKey) {
+        // ⇧⌘A ville kollidere med webviewets "markér alt"
+        e.preventDefault();
+        s.toggleAi();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -178,6 +183,16 @@ export default function App() {
       )}
       {shortcutsOpen && (
         <ShortcutsDialog onClose={() => useStore.getState().setShortcutsOpen(false)} />
+      )}
+      {aiKeyDialogOpen && (
+        <PromptDialog
+          title="Anthropic API-nøgle"
+          placeholder="sk-ant-…"
+          submitLabel="Gem"
+          inputType="password"
+          onClose={() => useStore.getState().setAiKeyDialogOpen(false)}
+          onSubmit={(key) => void useStore.getState().saveAiKey(key)}
+        />
       )}
     </div>
   );

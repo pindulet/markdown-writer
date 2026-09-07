@@ -29,6 +29,29 @@ function timeLabel(ts: number) {
     .padStart(2, "0")}`;
 }
 
+function AiChip() {
+  const aiEnabled = useStore((s) => s.aiEnabled);
+  const aiAvailable = useStore((s) => s.aiAvailable);
+  const label = !aiAvailable
+    ? "AI: nøgle mangler"
+    : aiEnabled
+      ? "AI: til"
+      : "AI: fra";
+  return (
+    <button
+      className={`ai-chip ${aiAvailable && aiEnabled ? "ai-chip-on" : ""}`}
+      title={
+        aiAvailable
+          ? "Automatiske skriveforslag til/fra (⇧⌘J). ⌥Tab foreslår manuelt."
+          : "Klik for at indsætte din Anthropic API-nøgle"
+      }
+      onClick={() => useStore.getState().toggleAi()}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function StatusBar({ doc }: { doc: Doc | undefined }) {
   // genrender løbende, så "lige nu" bliver til et klokkeslæt
   const [, setTick] = useState(0);
@@ -74,6 +97,7 @@ export default function StatusBar({ doc }: { doc: Doc | undefined }) {
         {words} ord · {chars} tegn
       </span>
       <span className="status-right">
+        <AiChip />
         <span className={rightAccent ? "status-accent" : ""}>{right}</span>
         <HelpButton />
       </span>

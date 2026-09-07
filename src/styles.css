@@ -957,6 +957,32 @@ button {
   gap: 10px;
 }
 
+/* AI-forslag: gråt ghost text ved markøren */
+.cm-ghost-text {
+  color: var(--text-faint);
+  opacity: 0.75;
+}
+
+.ai-chip {
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  padding: 1px 8px;
+  font-size: 11px;
+  color: var(--text-faint);
+  background: none;
+  cursor: pointer;
+}
+
+.ai-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+
+.ai-chip-on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .help-btn {
   width: 18px;
   height: 18px;

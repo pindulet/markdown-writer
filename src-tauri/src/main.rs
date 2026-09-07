@@ -319,6 +319,121 @@ async fn git_sync(path: String) -> Result<GitSyncResult, String> {
     })
 }
 
+// ---------- AI-forslag ----------
+// Autocomplete kalder Anthropic direkte fra Rust-siden, så API-nøglen
+// aldrig ligger i webviewet. Stilprompten (destilleret fra "Skriv som
+// Kristian"-skillen) caches hos Anthropic i op til en time, så hvert
+// kald reelt kun betaler for den nære kontekst omkring markøren.
+
+const AI_MODEL: &str = "claude-haiku-4-5";
+const AI_STYLE_PROMPT: &str = include_str!("../prompts/autocomplete.md");
+
+struct AiState {
+    client: reqwest::Client,
+}
+
+fn ai_key_path(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("anthropic-key"))
+}
+
+fn read_ai_key(app: &AppHandle) -> Option<String> {
+    if let Ok(key) = std::env::var("ANTHROPIC_API_KEY") {
+        let key = key.trim().to_string();
+        if !key.is_empty() {
+            return Some(key);
+        }
+    }
+    let path = ai_key_path(app)?;
+    fs::read_to_string(path)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+#[tauri::command]
+fn ai_key_present(app: AppHandle) -> bool {
+    read_ai_key(&app).is_some()
+}
+
+#[tauri::command]
+fn ai_set_key(app: AppHandle, key: String) -> Result<(), String> {
+    let path = ai_key_path(&app).ok_or("Ingen konfigurationsmappe")?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(&path, key.trim()).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&path, fs::Permissions::from_mode(0o600));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn suggest_completion(
+    app: AppHandle,
+    state: State<'_, AiState>,
+    title: String,
+    prefix: String,
+    suffix: String,
+) -> Result<String, String> {
+    let key = read_ai_key(&app).ok_or("Ingen API-nøgle")?;
+    let body = serde_json::json!({
+        "model": AI_MODEL,
+        "max_tokens": 120,
+        "temperature": 0.4,
+        "stop_sequences": ["\n\n"],
+        "system": [{
+            "type": "text",
+            "text": AI_STYLE_PROMPT,
+            "cache_control": {"type": "ephemeral", "ttl": "1h"}
+        }],
+        "messages": [{
+            "role": "user",
+            "content": format!(
+                "Note: {}\n\n<tekst_foer_markoer>\n{}\n</tekst_foer_markoer>\n<tekst_efter_markoer>\n{}\n</tekst_efter_markoer>\n\nForeslå fortsættelsen ved markøren.",
+                title, prefix, suffix
+            )
+        }]
+    });
+    let resp = state
+        .client
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key", key)
+        .header("anthropic-version", "2023-06-01")
+        .timeout(std::time::Duration::from_secs(10))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("API-fejl {}: {}", status, text));
+    }
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
+    let mut out = String::new();
+    if let Some(blocks) = json.get("content").and_then(|c| c.as_array()) {
+        for block in blocks {
+            if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                if let Some(t) = block.get("text").and_then(|t| t.as_str()) {
+                    out.push_str(t);
+                }
+            }
+        }
+    }
+    // behold evt. indledende mellemrum — det er en del af indsættelsen
+    let out = out.trim_end().to_string();
+    if out.trim() == "PAS" {
+        return Ok(String::new());
+    }
+    Ok(out)
+}
+
 #[tauri::command]
 fn frontend_ready(state: State<OpenState>) -> Vec<String> {
     state.ready.store(true, Ordering::SeqCst);
@@ -363,6 +478,9 @@ fn main() {
             pending: Mutex::new(Vec::new()),
             ready: AtomicBool::new(false),
         })
+        .manage(AiState {
+            client: reqwest::Client::new(),
+        })
         .invoke_handler(tauri::generate_handler![
             list_folder,
             read_file,
@@ -375,7 +493,10 @@ fn main() {
             watch_folder,
             git_info,
             git_sync,
-            frontend_ready
+            frontend_ready,
+            ai_key_present,
+            ai_set_key,
+            suggest_completion
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

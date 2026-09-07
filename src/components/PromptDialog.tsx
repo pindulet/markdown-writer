@@ -4,12 +4,14 @@ export default function PromptDialog({
   title,
   placeholder,
   submitLabel,
+  inputType = "text",
   onSubmit,
   onClose,
 }: {
   title: string;
   placeholder: string;
   submitLabel: string;
+  inputType?: string;
   onSubmit: (value: string) => void;
   onClose: () => void;
 }) {
@@ -28,6 +30,7 @@ export default function PromptDialog({
         <input
           className="dialog-input"
           autoFocus
+          type={inputType}
           value={value}
           placeholder={placeholder}
           onChange={(e) => setValue(e.target.value)}

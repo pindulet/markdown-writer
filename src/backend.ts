@@ -41,6 +41,9 @@ interface Backend {
   onFsChange(cb: (paths: string[]) => void): () => void;
   onOpenFile(cb: (paths: string[]) => void): () => void;
   frontendReady(): Promise<string[]>;
+  aiKeyPresent(): Promise<boolean>;
+  aiSetKey(key: string): Promise<void>;
+  suggestCompletion(title: string, prefix: string, suffix: string): Promise<string>;
 }
 
 const isTauri = "__TAURI_INTERNALS__" in window;
@@ -131,6 +134,18 @@ function createTauriBackend(): Backend {
     frontendReady: async () => {
       const { invoke } = await import("@tauri-apps/api/core");
       return invoke<string[]>("frontend_ready");
+    },
+    aiKeyPresent: async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<boolean>("ai_key_present");
+    },
+    aiSetKey: async (key) => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<void>("ai_set_key", { key });
+    },
+    suggestCompletion: async (title, prefix, suffix) => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<string>("suggest_completion", { title, prefix, suffix });
     },
   };
 }
@@ -253,6 +268,14 @@ function createMockBackend(): Backend {
     },
     onOpenFile: () => () => {},
     frontendReady: async () => [],
+    aiKeyPresent: async () => true,
+    aiSetKey: async () => {},
+    // fast svar med kunstig forsinkelse, så ghost text kan testes i browseren
+    suggestCompletion: async (_title, prefix) => {
+      await new Promise((r) => setTimeout(r, 400));
+      const text = "og det er egentlig hele pointen.";
+      return /\s$/.test(prefix) || prefix === "" ? text : ` ${text}`;
+    },
   };
 }
 
@@ -279,3 +302,6 @@ export const openUrl = backend.openUrl;
 export const onFsChange = backend.onFsChange;
 export const onOpenFile = backend.onOpenFile;
 export const frontendReady = backend.frontendReady;
+export const aiKeyPresent = backend.aiKeyPresent;
+export const aiSetKey = backend.aiSetKey;
+export const suggestCompletion = backend.suggestCompletion;
