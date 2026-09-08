@@ -32,18 +32,24 @@ function timeLabel(ts: number) {
 function AiChip() {
   const aiEnabled = useStore((s) => s.aiEnabled);
   const aiAvailable = useStore((s) => s.aiAvailable);
+  const aiLastError = useStore((s) => s.aiLastError);
+  const failed = aiAvailable && aiEnabled && aiLastError !== null;
   const label = !aiAvailable
     ? "AI: nøgle mangler"
-    : aiEnabled
-      ? "AI: til"
-      : "AI: fra";
+    : failed
+      ? "AI: fejl"
+      : aiEnabled
+        ? "AI: til"
+        : "AI: fra";
   return (
     <button
-      className={`ai-chip ${aiAvailable && aiEnabled ? "ai-chip-on" : ""}`}
+      className={`ai-chip ${failed ? "ai-chip-error" : aiAvailable && aiEnabled ? "ai-chip-on" : ""}`}
       title={
-        aiAvailable
-          ? "Automatiske skriveforslag til/fra (⇧⌘J). ⌥Tab foreslår manuelt."
-          : "Klik for at indsætte din Anthropic API-nøgle"
+        !aiAvailable
+          ? "Klik for at indsætte din Anthropic API-nøgle"
+          : failed
+            ? `Seneste forslag fejlede: ${aiLastError}`
+            : "Automatiske skriveforslag til/fra (⇧⌘J). ⌥Tab foreslår manuelt."
       }
       onClick={() => useStore.getState().toggleAi()}
     >

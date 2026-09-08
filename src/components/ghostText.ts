@@ -196,11 +196,14 @@ export function ghostText(path: string): Extension {
         this.inFlight = true;
         try {
           text = await suggestCompletion(noteTitle(path), prefix, suffix);
-        } catch {
-          return; // stille fejl: intet forslag er bedre end en fejlboks
+        } catch (e) {
+          // ingen fejlboks midt i skrivningen — men statusbaren skal vise hvorfor
+          s.setAiError(e instanceof Error ? e.message : String(e));
+          return;
         } finally {
           this.inFlight = false;
         }
+        s.setAiError(null);
         if (this.generation !== gen) return; // der er sket noget imens
         const clean = text.split("\n")[0].trimEnd();
         if (!clean) return;

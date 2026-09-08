@@ -92,11 +92,14 @@ export const GhostSuggest = Extension.create<{ path: string }>({
       ctl.inFlight = true;
       try {
         text = await suggestCompletion(noteTitle(path), prefix, suffix);
-      } catch {
-        return; // stille fejl: intet forslag er bedre end en fejlboks
+      } catch (e) {
+        // ingen fejlboks midt i skrivningen — men statusbaren skal vise hvorfor
+        s.setAiError(e instanceof Error ? e.message : String(e));
+        return;
       } finally {
         ctl.inFlight = false;
       }
+      s.setAiError(null);
       if (ctl.generation !== gen) return; // der er sket noget imens
       const clean = text.split("\n")[0].trimEnd();
       if (!clean) return;
