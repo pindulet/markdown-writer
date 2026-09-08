@@ -43,6 +43,7 @@ interface Store {
   aiEnabled: boolean; // automatiske AI-forslag mens man skriver
   aiAvailable: boolean; // der findes en API-nøgle
   aiKeyDialogOpen: boolean;
+  aiLastError: string | null; // seneste fejl fra forslags-kaldet, vises i statusbaren
 
   init: () => Promise<void>;
   setFolder: (path: string) => Promise<void>;
@@ -67,6 +68,7 @@ interface Store {
   setShortcutsOpen: (open: boolean) => void;
   setZoom: (zoom: number) => void;
   toggleAi: () => void;
+  setAiError: (err: string | null) => void;
   setAiKeyDialogOpen: (open: boolean) => void;
   saveAiKey: (key: string) => Promise<void>;
   newNote: (name: string, relDir: string) => Promise<void>;
@@ -152,6 +154,7 @@ export const useStore = create<Store>((set, get) => ({
   aiEnabled: true,
   aiAvailable: false,
   aiKeyDialogOpen: false,
+  aiLastError: null,
 
   init: async () => {
     let folder: string | null = null;
@@ -575,7 +578,7 @@ export const useStore = create<Store>((set, get) => ({
       return;
     }
     const enabled = !get().aiEnabled;
-    set({ aiEnabled: enabled });
+    set({ aiEnabled: enabled, aiLastError: null });
     try {
       localStorage.setItem("mw.ai", enabled ? "1" : "0");
     } catch {
@@ -583,11 +586,15 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
+  setAiError: (err: string | null) => {
+    if (get().aiLastError !== err) set({ aiLastError: err });
+  },
+
   setAiKeyDialogOpen: (open: boolean) => set({ aiKeyDialogOpen: open }),
 
   saveAiKey: async (key: string) => {
     await fsApi.aiSetKey(key);
-    set({ aiAvailable: true, aiEnabled: true, aiKeyDialogOpen: false });
+    set({ aiAvailable: true, aiEnabled: true, aiKeyDialogOpen: false, aiLastError: null });
     try {
       localStorage.setItem("mw.ai", "1");
     } catch {

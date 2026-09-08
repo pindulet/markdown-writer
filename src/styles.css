@@ -983,6 +983,12 @@ button {
   border-color: var(--accent);
 }
 
+.ai-chip-error {
+  color: var(--banner-external-text);
+  border-color: var(--banner-external-border);
+  background: var(--banner-external-bg);
+}
+
 .help-btn {
   width: 18px;
   height: 18px;
