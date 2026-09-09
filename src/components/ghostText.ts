@@ -18,12 +18,13 @@ import {
 import { suggestCompletion } from "../backend";
 import { useStore } from "../store";
 
-const DEBOUNCE_MS = 600;
+const DEBOUNCE_MS = 300;
 const PREFIX_CHARS = 2000; // kontekst før markøren, der sendes med
 const SUFFIX_CHARS = 500;
 
 interface Ghost {
-  pos: number;
+  pos: number; // hvor forslaget vises og indsættes
+  anchor: number; // hvor markøren stod — midt i et ord ligger pos efter ordet
   text: string;
 }
 
@@ -57,7 +58,9 @@ const ghostField = StateField.define<Ghost | null>({
     }
     if (!fromEffect && ghost && tr.docChanged) {
       // skriv-igennem: én ren indsættelse ved forslaget, der matcher
-      // dets begyndelse, forbruger den del og beholder resten
+      // dets begyndelse, forbruger den del og beholder resten.
+      // Gælder kun når forslaget står ved selve markøren — et forslag
+      // efter et ord (midt-i-ord) falder ved enhver redigering.
       let single = true;
       let count = 0;
       let inserted = "";
@@ -67,14 +70,21 @@ const ghostField = StateField.define<Ghost | null>({
         if (fromA !== toA || fromA !== pos) single = false;
         inserted = text.toString();
       });
-      if (count === 1 && single && inserted && ghost.text.startsWith(inserted)) {
+      if (
+        ghost.anchor === ghost.pos &&
+        count === 1 &&
+        single &&
+        inserted &&
+        ghost.text.startsWith(inserted)
+      ) {
         const rest = ghost.text.slice(inserted.length);
-        ghost = rest ? { pos: ghost.pos + inserted.length, text: rest } : null;
+        const moved = ghost.pos + inserted.length;
+        ghost = rest ? { pos: moved, anchor: moved, text: rest } : null;
       } else {
         ghost = null;
       }
     }
-    if (ghost && tr.newSelection.main.head !== ghost.pos) return null;
+    if (ghost && tr.newSelection.main.head !== ghost.anchor) return null;
     return ghost;
   },
   provide: (f) =>
@@ -175,17 +185,34 @@ export function ghostText(path: string): Extension {
         const sel = state.selection.main;
         if (!sel.empty) return;
         const head = sel.head;
-        const prefix = state.sliceDoc(Math.max(0, head - PREFIX_CHARS), head);
-        const suffix = state.sliceDoc(
+        // midt i et ord: flyt forslagspunktet til ordets slutning, så
+        // modellen fuldfører hele ordet og fortsætter derfra
+        let pos = head;
+        const charBefore = head > 0 ? state.sliceDoc(head - 1, head) : "";
+        const charAfter = state.sliceDoc(
           head,
-          Math.min(state.doc.length, head + SUFFIX_CHARS)
+          Math.min(state.doc.length, head + 1)
+        );
+        if (
+          charBefore &&
+          !/\s/.test(charBefore) &&
+          charAfter &&
+          !/\s/.test(charAfter)
+        ) {
+          const lineEnd = state.doc.lineAt(head).to;
+          const tail = state
+            .sliceDoc(head, Math.min(lineEnd, head + 40))
+            .match(/^\S+/);
+          if (tail) pos = head + tail[0].length;
+        }
+        const prefix = state.sliceDoc(Math.max(0, pos - PREFIX_CHARS), pos);
+        const suffix = state.sliceDoc(
+          pos,
+          Math.min(state.doc.length, pos + SUFFIX_CHARS)
         );
         if (inCodeFence(prefix)) return;
         if (!manual) {
           if (prefix.trim().length < 20) return;
-          // aldrig midt i et ord
-          const after = suffix.charAt(0);
-          if (after && !/\s/.test(after)) return;
           // vent til der står noget reelt på linjen, og lad overskrifter være
           const line = prefix.slice(prefix.lastIndexOf("\n") + 1);
           if (line.trim().length < 3) return;
@@ -205,10 +232,14 @@ export function ghostText(path: string): Extension {
         }
         s.setAiError(null);
         if (this.generation !== gen) return; // der er sket noget imens
-        const clean = text.split("\n")[0].trimEnd();
+        let clean = text.split("\n")[0].trimEnd();
         if (!clean) return;
+        // står der et ord lige efter forslaget, skal der et mellemrum imellem
+        if (/^[\p{L}\p{N}]/u.test(suffix)) clean += " ";
         if (this.view.state.selection.main.head !== head) return;
-        this.view.dispatch({ effects: setGhost.of({ pos: head, text: clean }) });
+        this.view.dispatch({
+          effects: setGhost.of({ pos, anchor: head, text: clean }),
+        });
       }
     }
   );

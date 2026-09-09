@@ -382,22 +382,34 @@ async fn suggest_completion(
     suffix: String,
 ) -> Result<String, String> {
     let key = read_ai_key(&app).ok_or("Ingen API-nøgle")?;
+    // sidste ord(fragment) før markøren bruges som anker og prefilles i
+    // assistant-svaret — modellen fortsætter bare, så svaret er ren
+    // fortsættelse og kan aldrig komme til at gentage ankeret
+    let trimmed_prefix = prefix.trim_end();
+    let ends_in_whitespace = trimmed_prefix.len() != prefix.len();
+    let last_word = trimmed_prefix
+        .rsplit(|c: char| c.is_whitespace())
+        .next()
+        .unwrap_or("");
     let body = serde_json::json!({
         "model": AI_MODEL,
         "max_tokens": 120,
         "temperature": 0.4,
-        "stop_sequences": ["\n\n"],
         "system": [{
             "type": "text",
             "text": AI_STYLE_PROMPT,
             "cache_control": {"type": "ephemeral", "ttl": "1h"}
         }],
+        "stop_sequences": ["</forslag>"],
         "messages": [{
             "role": "user",
             "content": format!(
                 "Note: {}\n\n<tekst_foer_markoer>\n{}\n</tekst_foer_markoer>\n<tekst_efter_markoer>\n{}\n</tekst_efter_markoer>\n\nForeslå fortsættelsen ved markøren.",
                 title, prefix, suffix
             )
+        }, {
+            "role": "assistant",
+            "content": format!("<forslag>{}", last_word)
         }]
     });
     let resp = state
@@ -426,11 +438,24 @@ async fn suggest_completion(
             }
         }
     }
-    // behold evt. indledende mellemrum — det er en del af indsættelsen
+    let out = match out.find("</forslag>") {
+        Some(i) => out[..i].to_string(),
+        None => out,
+    };
     let out = out.trim_end().to_string();
-    if out.trim() == "PAS" {
+    // PAS også når modellen pakker det ind ("PAS.", "\"PAS\"", " PAS")
+    let core: &str = out.trim().trim_matches(|c: char| !c.is_alphanumeric());
+    if core == "PAS" {
         return Ok(String::new());
     }
+    // ankerordet er prefillet og indgår ikke i svaret. Ender prefixet med
+    // whitespace, står adskillelsen allerede i noten, så et ledende
+    // mellemrum i fortsættelsen fjernes for ikke at fordoble det
+    let out = if ends_in_whitespace {
+        out.trim_start().to_string()
+    } else {
+        out
+    };
     Ok(out)
 }
 

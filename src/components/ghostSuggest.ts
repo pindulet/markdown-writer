@@ -11,12 +11,13 @@ import type { EditorView } from "@tiptap/pm/view";
 import { suggestCompletion } from "../backend";
 import { useStore } from "../store";
 
-const DEBOUNCE_MS = 600;
+const DEBOUNCE_MS = 300;
 const PREFIX_CHARS = 2000;
 const SUFFIX_CHARS = 500;
 
 interface Ghost {
-  pos: number;
+  pos: number; // hvor forslaget vises og indsættes
+  anchor: number; // hvor markøren stod — midt i et ord ligger pos efter ordet
   text: string;
 }
 
@@ -64,25 +65,35 @@ export const GhostSuggest = Extension.create<{ path: string }>({
       if (!$head.parent.isTextblock) return;
       if ($head.parent.type.name === "codeBlock") return;
       const head = $head.pos;
+      // midt i et ord: flyt forslagspunktet til ordets slutning, så
+      // modellen fuldfører hele ordet og fortsætter derfra
+      let pos = head;
+      const paraText = $head.parent.textContent;
+      const off = $head.parentOffset;
+      const charBefore = off > 0 ? paraText.charAt(off - 1) : "";
+      const charAfter = paraText.charAt(off);
+      if (
+        charBefore &&
+        !/\s/.test(charBefore) &&
+        charAfter &&
+        !/\s/.test(charAfter)
+      ) {
+        const tail = paraText.slice(off, off + 40).match(/^\S+/);
+        if (tail) pos = head + tail[0].length;
+      }
       const prefix = state.doc.textBetween(
-        Math.max(0, head - PREFIX_CHARS),
-        head,
+        Math.max(0, pos - PREFIX_CHARS),
+        pos,
         "\n"
       );
       const suffix = state.doc.textBetween(
-        head,
-        Math.min(state.doc.content.size, head + SUFFIX_CHARS),
+        pos,
+        Math.min(state.doc.content.size, pos + SUFFIX_CHARS),
         "\n"
       );
       if (!manual) {
         if (prefix.trim().length < 20) return;
         if ($head.parent.type.name === "heading") return;
-        // aldrig midt i et ord
-        const after = $head.parent.textContent.slice(
-          $head.parentOffset,
-          $head.parentOffset + 1
-        );
-        if (after && !/\s/.test(after)) return;
         // vent til der står noget reelt i den aktuelle blok
         const line = $head.parent.textBetween(0, $head.parentOffset);
         if (line.trim().length < 3) return;
@@ -101,11 +112,15 @@ export const GhostSuggest = Extension.create<{ path: string }>({
       }
       s.setAiError(null);
       if (ctl.generation !== gen) return; // der er sket noget imens
-      const clean = text.split("\n")[0].trimEnd();
+      let clean = text.split("\n")[0].trimEnd();
       if (!clean) return;
+      // står der et ord lige efter forslaget, skal der et mellemrum imellem
+      if (/^[\p{L}\p{N}]/u.test(suffix)) clean += " ";
       if (view.state.selection.$head.pos !== head || !view.state.selection.empty)
         return;
-      view.dispatch(view.state.tr.setMeta(ghostKey, { pos: head, text: clean }));
+      view.dispatch(
+        view.state.tr.setMeta(ghostKey, { pos, anchor: head, text: clean })
+      );
     };
 
     const dismiss = (view: EditorView): boolean => {
@@ -139,9 +154,12 @@ export const GhostSuggest = Extension.create<{ path: string }>({
             if (!ghost) return null;
             if (tr.docChanged) {
               // skriv-igennem: én ren tekstindsættelse ved forslaget, der
-              // matcher dets begyndelse, forbruger den del og beholder resten
+              // matcher dets begyndelse, forbruger den del og beholder resten.
+              // Gælder kun når forslaget står ved selve markøren — et forslag
+              // efter et ord (midt-i-ord) falder ved enhver redigering.
               const step = tr.steps.length === 1 ? tr.steps[0] : null;
               if (
+                ghost.anchor === ghost.pos &&
                 step instanceof ReplaceStep &&
                 step.from === step.to &&
                 step.from === ghost.pos
@@ -152,9 +170,8 @@ export const GhostSuggest = Extension.create<{ path: string }>({
                 );
                 if (inserted && ghost.text.startsWith(inserted)) {
                   const rest = ghost.text.slice(inserted.length);
-                  ghost = rest
-                    ? { pos: ghost.pos + inserted.length, text: rest }
-                    : null;
+                  const moved = ghost.pos + inserted.length;
+                  ghost = rest ? { pos: moved, anchor: moved, text: rest } : null;
                 } else {
                   ghost = null;
                 }
@@ -162,7 +179,8 @@ export const GhostSuggest = Extension.create<{ path: string }>({
                 ghost = null;
               }
             }
-            if (ghost && newState.selection.$head.pos !== ghost.pos) return null;
+            if (ghost && newState.selection.$head.pos !== ghost.anchor)
+              return null;
             if (ghost && !newState.selection.empty) return null;
             return ghost;
           },

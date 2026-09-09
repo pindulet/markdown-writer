@@ -961,6 +961,7 @@ button {
 .cm-ghost-text {
   color: var(--text-faint);
   opacity: 0.75;
+  white-space: pre-wrap;
 }
 
 .ai-chip {
