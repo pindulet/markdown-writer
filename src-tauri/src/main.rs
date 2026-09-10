@@ -531,8 +531,29 @@ fn main() {
         if let tauri::RunEvent::Opened { urls } = event {
             let paths: Vec<String> = urls
                 .iter()
-                .filter_map(|u| u.to_file_path().ok())
-                .map(|p| p.to_string_lossy().to_string())
+                .filter_map(|u| match u.scheme() {
+                    "file" => u
+                        .to_file_path()
+                        .ok()
+                        .map(|p| p.to_string_lossy().to_string()),
+                    // url-scheme: mdwriter:///absolut/sti/til/note.md
+                    // (procent-kodet), så links fra fx Claude åbner direkte
+                    "mdwriter" => {
+                        let path = percent_encoding::percent_decode_str(u.path())
+                            .decode_utf8()
+                            .ok()?
+                            .to_string();
+                        // skrives linket med to skråstreger (mdwriter://Users/…),
+                        // ender første led som "host" — sæt det tilbage på stien
+                        match u.host_str() {
+                            Some(host) if !host.is_empty() => {
+                                Some(format!("/{}{}", host, path))
+                            }
+                            _ => Some(path),
+                        }
+                    }
+                    _ => None,
+                })
                 .collect();
             if paths.is_empty() {
                 return;
