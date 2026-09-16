@@ -12,8 +12,10 @@ import { suggestCompletion } from "../backend";
 import { useStore } from "../store";
 
 const DEBOUNCE_MS = 300;
-const PREFIX_CHARS = 2000;
-const SUFFIX_CHARS = 500;
+// Hele noten sendes med som kontekst; lofterne er kun et værn mod
+// ekstremt lange noter, så kaldet ikke bliver dyrt og langsomt
+const PREFIX_CHARS = 24000;
+const SUFFIX_CHARS = 8000;
 
 interface Ghost {
   pos: number; // hvor forslaget vises og indsættes

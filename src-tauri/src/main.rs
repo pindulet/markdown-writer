@@ -325,7 +325,7 @@ async fn git_sync(path: String) -> Result<GitSyncResult, String> {
 // Kristian"-skillen) caches hos Anthropic i op til en time, så hvert
 // kald reelt kun betaler for den nære kontekst omkring markøren.
 
-const AI_MODEL: &str = "claude-haiku-4-5";
+const AI_MODEL: &str = "claude-sonnet-5";
 const AI_STYLE_PROMPT: &str = include_str!("../prompts/autocomplete.md");
 
 struct AiState {
@@ -394,7 +394,7 @@ async fn suggest_completion(
     let body = serde_json::json!({
         "model": AI_MODEL,
         "max_tokens": 120,
-        "temperature": 0.4,
+        "temperature": 0.1,
         "system": [{
             "type": "text",
             "text": AI_STYLE_PROMPT,
