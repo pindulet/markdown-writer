@@ -43,7 +43,12 @@ interface Backend {
   frontendReady(): Promise<string[]>;
   aiKeyPresent(): Promise<boolean>;
   aiSetKey(key: string): Promise<void>;
-  suggestCompletion(title: string, prefix: string, suffix: string): Promise<string>;
+  suggestCompletion(
+    title: string,
+    prefix: string,
+    suffix: string,
+    model: string
+  ): Promise<string>;
 }
 
 const isTauri = "__TAURI_INTERNALS__" in window;
@@ -143,9 +148,9 @@ function createTauriBackend(): Backend {
       const { invoke } = await import("@tauri-apps/api/core");
       return invoke<void>("ai_set_key", { key });
     },
-    suggestCompletion: async (title, prefix, suffix) => {
+    suggestCompletion: async (title, prefix, suffix, model) => {
       const { invoke } = await import("@tauri-apps/api/core");
-      return invoke<string>("suggest_completion", { title, prefix, suffix });
+      return invoke<string>("suggest_completion", { title, prefix, suffix, model });
     },
   };
 }

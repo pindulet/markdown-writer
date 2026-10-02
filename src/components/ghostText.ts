@@ -224,7 +224,12 @@ export function ghostText(path: string): Extension {
         let text: string;
         this.inFlight = true;
         try {
-          text = await suggestCompletion(noteTitle(path), prefix, suffix);
+          text = await suggestCompletion(
+            noteTitle(path),
+            prefix,
+            suffix,
+            useStore.getState().aiModel
+          );
         } catch (e) {
           // ingen fejlboks midt i skrivningen — men statusbaren skal vise hvorfor
           s.setAiError(e instanceof Error ? e.message : String(e));

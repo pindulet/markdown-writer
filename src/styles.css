@@ -1134,3 +1134,10 @@ button {
   justify-content: flex-end;
   gap: 8px;
 }
+
+.ai-model {
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: inherit;
+  line-height: inherit;
+}

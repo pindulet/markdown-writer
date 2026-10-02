@@ -4,6 +4,14 @@ import { mergeThreeWay } from "./diff";
 
 export type ViewMode = "markdown" | "layout";
 
+// skal matche AI_MODELS i src-tauri/src/main.rs; første er standard
+export const AI_MODELS = [
+  { id: "claude-haiku-4-5", label: "Haiku 4.5" },
+  { id: "claude-sonnet-5", label: "Sonnet 5" },
+  { id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
+] as const;
+export type AiModel = (typeof AI_MODELS)[number]["id"];
+
 // null = endnu ikke synket i denne session
 export type SyncStatus = "syncing" | "ok" | "offline" | "conflict" | "error" | null;
 
@@ -42,6 +50,7 @@ interface Store {
   zoom: number; // skalering af editortekst, 1 = normal
   aiEnabled: boolean; // automatiske AI-forslag mens man skriver
   aiAvailable: boolean; // der findes en API-nøgle
+  aiModel: AiModel; // hvilken model der laver forslagene
   aiKeyDialogOpen: boolean;
   aiLastError: string | null; // seneste fejl fra forslags-kaldet, vises i statusbaren
 
@@ -69,6 +78,7 @@ interface Store {
   setZoom: (zoom: number) => void;
   toggleAi: () => void;
   setAiError: (err: string | null) => void;
+  setAiModel: (model: AiModel) => void;
   setAiKeyDialogOpen: (open: boolean) => void;
   saveAiKey: (key: string) => Promise<void>;
   newNote: (name: string, relDir: string) => Promise<void>;
@@ -153,6 +163,7 @@ export const useStore = create<Store>((set, get) => ({
   zoom: 1,
   aiEnabled: true,
   aiAvailable: false,
+  aiModel: AI_MODELS[0].id,
   aiKeyDialogOpen: false,
   aiLastError: null,
 
@@ -170,6 +181,8 @@ export const useStore = create<Store>((set, get) => ({
       const z = Number(localStorage.getItem("mw.zoom"));
       if (z >= 0.7 && z <= 1.6) get().setZoom(z);
       if (localStorage.getItem("mw.ai") === "0") set({ aiEnabled: false });
+      const m = AI_MODELS.find((x) => x.id === localStorage.getItem("mw.aiModel"));
+      if (m) set({ aiModel: m.id });
     } catch {
       // ignorer korrupt session
     }
@@ -588,6 +601,15 @@ export const useStore = create<Store>((set, get) => ({
 
   setAiError: (err: string | null) => {
     if (get().aiLastError !== err) set({ aiLastError: err });
+  },
+
+  setAiModel: (model: AiModel) => {
+    set({ aiModel: model });
+    try {
+      localStorage.setItem("mw.aiModel", model);
+    } catch {
+      // ikke kritisk
+    }
   },
 
   setAiKeyDialogOpen: (open: boolean) => set({ aiKeyDialogOpen: open }),

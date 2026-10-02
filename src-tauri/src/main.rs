@@ -325,7 +325,13 @@ async fn git_sync(path: String) -> Result<GitSyncResult, String> {
 // Kristian"-skillen) caches hos Anthropic i op til en time, så hvert
 // kald reelt kun betaler for den nære kontekst omkring markøren.
 
-const AI_MODEL: &str = "claude-sonnet-5";
+// modeller man kan vælge i statusbaren; første er standard. Thinking slås
+// fra for fart: Sonnet 5.5 afviser "disabled" og bruger "between_tools"
+const AI_MODELS: &[(&str, &str)] = &[
+    ("claude-haiku-4-5", "disabled"),
+    ("claude-sonnet-5", "disabled"),
+    ("claude-sonnet-5-5", "between_tools"),
+];
 const AI_STYLE_PROMPT: &str = include_str!("../prompts/autocomplete.md");
 
 struct AiState {
@@ -380,11 +386,16 @@ async fn suggest_completion(
     title: String,
     prefix: String,
     suffix: String,
+    model: Option<String>,
 ) -> Result<String, String> {
     let key = read_ai_key(&app).ok_or("Ingen API-nøgle")?;
-    // sidste ord(fragment) før markøren bruges som anker og prefilles i
-    // assistant-svaret — modellen fortsætter bare, så svaret er ren
-    // fortsættelse og kan aldrig komme til at gentage ankeret
+    let (model, thinking) = AI_MODELS
+        .iter()
+        .find(|(id, _)| Some(*id) == model.as_deref())
+        .unwrap_or(&AI_MODELS[0]);
+    // sidste ord(fragment) før markøren bruges som anker: modellen starter
+    // sit svar med det, og vi skærer det af igen, så svaret er ren
+    // fortsættelse. (Sonnet 5 og nyere understøtter ikke assistant-prefill.)
     let trimmed_prefix = prefix.trim_end();
     let ends_in_whitespace = trimmed_prefix.len() != prefix.len();
     let last_word = trimmed_prefix
@@ -392,9 +403,9 @@ async fn suggest_completion(
         .next()
         .unwrap_or("");
     let body = serde_json::json!({
-        "model": AI_MODEL,
+        "model": model,
         "max_tokens": 120,
-        "temperature": 0.1,
+        "thinking": {"type": thinking},
         "system": [{
             "type": "text",
             "text": AI_STYLE_PROMPT,
@@ -404,12 +415,9 @@ async fn suggest_completion(
         "messages": [{
             "role": "user",
             "content": format!(
-                "Note: {}\n\n<tekst_foer_markoer>\n{}\n</tekst_foer_markoer>\n<tekst_efter_markoer>\n{}\n</tekst_efter_markoer>\n\nForeslå fortsættelsen ved markøren.",
-                title, prefix, suffix
+                "Note: {}\n\n<tekst_foer_markoer>\n{}\n</tekst_foer_markoer>\n<tekst_efter_markoer>\n{}\n</tekst_efter_markoer>\n\nAnkerordet er: {}\nForeslå fortsættelsen ved markøren. Start svaret med <forslag>{}",
+                title, prefix, suffix, last_word, last_word
             )
-        }, {
-            "role": "assistant",
-            "content": format!("<forslag>{}", last_word)
         }]
     });
     let resp = state
@@ -442,13 +450,22 @@ async fn suggest_completion(
         Some(i) => out[..i].to_string(),
         None => out,
     };
+    // skær "<forslag>" og ankerordet af, som modellen selv har gentaget
+    let out = match out.find("<forslag>") {
+        Some(i) => out[i + "<forslag>".len()..].to_string(),
+        None => out.trim_start().to_string(),
+    };
+    let out = match out.strip_prefix(last_word) {
+        Some(rest) if !last_word.is_empty() => rest.to_string(),
+        _ => out,
+    };
     let out = out.trim_end().to_string();
     // PAS også når modellen pakker det ind ("PAS.", "\"PAS\"", " PAS")
     let core: &str = out.trim().trim_matches(|c: char| !c.is_alphanumeric());
     if core == "PAS" {
         return Ok(String::new());
     }
-    // ankerordet er prefillet og indgår ikke i svaret. Ender prefixet med
+    // ankerordet er skåret af og indgår ikke i svaret. Ender prefixet med
     // whitespace, står adskillelsen allerede i noten, så et ledende
     // mellemrum i fortsættelsen fjernes for ikke at fordoble det
     let out = if ends_in_whitespace {

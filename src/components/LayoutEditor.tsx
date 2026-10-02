@@ -78,7 +78,8 @@ const VaultImage = Image.extend({
 import ContextMenu, { type MenuItem } from "./ContextMenu";
 import LinkDialog from "./LinkDialog";
 
-// ⌘1–⌘6 for overskrifter, ⌘0 for brødtekst, Tab/⇧Tab som indrykning i lister.
+// ⌘1–⌘6 for overskrifter, ⌘0 for brødtekst, Tab/⇧Tab som indrykning i lister
+// (Tab i et almindeligt afsnit gør det til et listepunkt).
 // Tab sluges altid, så fokus ikke hopper ud af editoren.
 const EditorShortcuts = Extension.create({
   name: "editorShortcuts",
@@ -102,6 +103,13 @@ const EditorShortcuts = Extension.create({
         this.editor.chain().focus().sinkListItem("listItem").run() ||
         this.editor.chain().focus().sinkListItem("taskItem").run() ||
         this.editor.commands.goToNextCell() ||
+        // Markdown har ingen indrykning af almindelige afsnit (forreste
+        // mellemrum bliver til kodeblok), så Tab gør afsnittet til et
+        // listepunkt; næste Tab rykker det ind, ⇧Tab gør det til tekst igen
+        (this.editor.isActive("paragraph") &&
+          !this.editor.isActive("listItem") &&
+          !this.editor.isActive("taskItem") &&
+          this.editor.chain().focus().toggleBulletList().run()) ||
         true,
       "Shift-Tab": () =>
         this.editor.chain().focus().liftListItem("listItem").run() ||

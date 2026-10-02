@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useStore, type Doc } from "../store";
+import { AI_MODELS, useStore, type AiModel, type Doc } from "../store";
 
 function HelpButton() {
   return (
@@ -58,9 +58,28 @@ function AiChip() {
   );
 }
 
+function AiModelPicker() {
+  const aiModel = useStore((s) => s.aiModel);
+  return (
+    <select
+      className="ai-chip ai-model"
+      title="Model til skriveforslag"
+      value={aiModel}
+      onChange={(e) => useStore.getState().setAiModel(e.target.value as AiModel)}
+    >
+      {AI_MODELS.map((m) => (
+        <option key={m.id} value={m.id}>
+          {m.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export default function StatusBar({ doc }: { doc: Doc | undefined }) {
   // genrender løbende, så "lige nu" bliver til et klokkeslæt
   const [, setTick] = useState(0);
+  const aiOn = useStore((s) => s.aiAvailable && s.aiEnabled);
   useEffect(() => {
     const id = window.setInterval(() => setTick((t) => t + 1), 30_000);
     return () => window.clearInterval(id);
@@ -104,6 +123,7 @@ export default function StatusBar({ doc }: { doc: Doc | undefined }) {
       </span>
       <span className="status-right">
         <AiChip />
+        {aiOn && <AiModelPicker />}
         <span className={rightAccent ? "status-accent" : ""}>{right}</span>
         <HelpButton />
       </span>
