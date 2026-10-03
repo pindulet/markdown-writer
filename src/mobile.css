@@ -1,0 +1,652 @@
+/* Mobil-/webudgaven (iPhone-PWA). Reglerne gælder kun under .app.mobile
+   (smal skærm eller telefon på tværs, se useIsMobile.ts) og .platform-web,
+   så desktop-appen ser ud som før. Komponentklasser til bundark, bekræftelse
+   og kort besked er fælles.
+   NB: aldrig -webkit-user-select: none på forfædre til editorerne (Safari
+   fryser TipTap) — kun på rækker og knapper. */
+
+:root {
+  --danger: #c23b2e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --danger: #e5675a;
+  }
+}
+
+/* samme farve som notelisten og index.html, så opstarten ikke blinker */
+html[data-platform="web"],
+html[data-platform="web"] body {
+  background: var(--bg-sidebar);
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ---------- Skal: følger den synlige del af skærmen (viewport.ts) ---------- */
+
+.app.mobile {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--vvh, 100dvh);
+  transform: translateY(var(--vvtop, 0px));
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-editor);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app.mobile .main {
+  flex: 1;
+  min-height: 0;
+}
+
+.app.mobile button {
+  touch-action: manipulation;
+}
+
+.app.mobile .traffic-space,
+.platform-web .traffic-space {
+  display: none;
+}
+
+/* web i et bredt browservindue: ingen trafiklys at gøre plads til */
+.platform-web:not(.mobile) .sidebar-header {
+  height: 52px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.platform-web .tab-bar.sidebar-hidden {
+  padding-left: 10px;
+}
+
+/* ---------- Notelisten (Sidebar i fuld skærm) ---------- */
+
+.app.mobile .sidebar {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border-right: none;
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.app.mobile .sidebar-header {
+  min-height: 52px;
+  padding: 4px 6px 4px 20px;
+  gap: 8px;
+}
+
+.app.mobile .sidebar-header > svg {
+  width: 16px;
+  height: 16px;
+}
+
+.app.mobile .sidebar-title {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.app.mobile .icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+.app.mobile .sidebar-header .icon-btn svg {
+  width: 21px;
+  height: 21px;
+}
+
+.app.mobile .search-box {
+  min-height: 40px;
+  margin: 0 16px 10px;
+  padding: 0 4px 0 12px;
+  gap: 8px;
+  border-radius: 10px;
+}
+
+.app.mobile .search-box > svg {
+  width: 15px;
+  height: 15px;
+}
+
+.app.mobile .search-input {
+  font-size: 16px; /* under 16 px zoomer iOS ind ved fokus */
+  padding: 8px 0;
+}
+
+.app.mobile .search-box .icon-btn {
+  width: 32px;
+  height: 32px;
+}
+
+.app.mobile .search-box .icon-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.app.mobile .file-list {
+  padding: 0 8px 12px;
+  overscroll-behavior: contain;
+}
+
+.app.mobile .file-row,
+.app.mobile .folder-row {
+  min-height: 44px;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-right: 12px;
+  gap: 10px;
+  border-radius: 8px;
+  font-size: 16px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+.app.mobile .file-row svg {
+  width: 17px;
+  height: 17px;
+}
+
+.app.mobile .chevron {
+  width: 13px;
+  height: 13px;
+}
+
+.app.mobile .claude-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.app.mobile .search-hint {
+  padding: 0 12px 8px 37px;
+  margin-top: -6px;
+  font-size: 13px;
+}
+
+.app.mobile .search-empty {
+  padding: 16px 12px;
+  font-size: 15px;
+}
+
+.app.mobile .sidebar-footer {
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+}
+
+/* mens der søges, skal resultaterne have pladsen over tastaturet */
+html.kb-open .app.mobile .sidebar-footer {
+  display: none;
+}
+
+.app.mobile .new-note-btn {
+  justify-content: center;
+  min-height: 48px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.app.mobile .new-note-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.app.mobile .sync-btn {
+  justify-content: center;
+  min-height: 40px;
+  margin-top: 6px;
+  font-size: 13px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.app.mobile .sync-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.app.mobile .sync-detail {
+  padding: 0 10px 4px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* iOS lader :hover hænge ved efter et tryk; giv i stedet feedback under trykket */
+@media (hover: none) {
+  .app.mobile .file-row:hover,
+  .app.mobile .folder-row:hover,
+  .app.mobile .icon-btn:hover,
+  .app.mobile .sync-btn:hover {
+    background: none;
+  }
+
+  .app.mobile .icon-btn:hover {
+    color: var(--text-faint);
+  }
+}
+
+.app.mobile .file-row:active,
+.app.mobile .folder-row:active,
+.app.mobile .file-row.active {
+  background: var(--bg-active);
+}
+
+.app.mobile .new-note-btn:active {
+  opacity: 0.7;
+}
+
+/* ---------- Topbar over editoren ---------- */
+
+.mobile-topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: calc(44px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) max(4px, env(safe-area-inset-right)) 0
+    max(4px, env(safe-area-inset-left));
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--hairline);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.mobile-topbar button:active {
+  opacity: 0.5;
+}
+
+.mtb-back {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 6px 0 0;
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.mtb-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.mtb-name,
+.mtb-status {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mtb-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.mtb-status {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.mtb-status.accent {
+  color: var(--accent);
+}
+
+.mtb-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.view-switcher.compact {
+  margin-right: 2px;
+}
+
+.view-switcher.compact .segment {
+  min-width: 34px;
+  padding: 5px 8px;
+  font-size: 13px;
+}
+
+.view-switcher.compact .segment-layout {
+  font-family: var(--serif);
+  font-size: 14px;
+}
+
+.view-switcher.compact .segment-markdown {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.mtb-btn {
+  height: 44px;
+  padding: 0 8px;
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.mtb-btn.strong {
+  font-weight: 600;
+}
+
+.mtb-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 44px;
+  color: var(--accent);
+}
+
+/* ---------- Bannere og editor ---------- */
+
+.app.mobile .banner {
+  flex-wrap: wrap;
+  row-gap: 6px;
+  padding: 10px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
+  font-size: 14px;
+}
+
+/* teksten fylder første linje; knapperne ombrydes til højre under den */
+.app.mobile .banner-text {
+  flex: 1 1 calc(100% - 30px);
+  line-height: 1.35;
+}
+
+.app.mobile .banner-btn {
+  padding: 7px 12px;
+  font-size: 15px;
+}
+
+.app.mobile .editor-area {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.app.mobile .editor-empty {
+  padding: 24px;
+  text-align: center;
+  font-size: 15px;
+}
+
+.app.mobile .layout-scroll,
+.app.mobile .markdown-editor .cm-scroller {
+  overscroll-behavior: contain;
+}
+
+.app.mobile .layout-content {
+  padding: 20px 20px 120px;
+  font-size: max(16px, calc(17px * var(--editor-zoom)));
+}
+
+.app.mobile .layout-content h1 {
+  font-size: calc(28px * var(--editor-zoom));
+}
+
+.app.mobile .layout-content table {
+  font-size: max(16px, calc(15.5px * var(--editor-zoom)));
+}
+
+/* tjekbokse: større trykflade uden at flytte teksten */
+.app.mobile .layout-content ul[data-type="taskList"] > li > label {
+  padding: 12px;
+  margin: -12px;
+}
+
+.app.mobile .markdown-editor .cm-scroller {
+  font-size: max(16px, calc(14.5px * var(--editor-zoom)));
+  padding: 20px 0 120px;
+}
+
+.app.mobile .markdown-editor .cm-content {
+  padding: 0 20px;
+}
+
+/* ---------- Dialoger på mobil: øverst, da tastaturet dækker bunden ---------- */
+
+.app.mobile .dialog-overlay {
+  padding: calc(env(safe-area-inset-top) + 12px) max(12px, env(safe-area-inset-right)) 12px
+    max(12px, env(safe-area-inset-left));
+}
+
+.app.mobile .dialog {
+  width: 100%;
+  max-width: 440px;
+  padding: 18px;
+  gap: 14px;
+  border-radius: 14px;
+}
+
+.app.mobile .dialog-title {
+  font-size: 17px;
+}
+
+.app.mobile .dialog-text {
+  font-size: 15px;
+}
+
+.app.mobile .dialog-input,
+.app.mobile .dialog-select {
+  font-size: 16px;
+  padding: 10px 12px;
+  border-radius: 9px;
+}
+
+.app.mobile .dialog-actions .primary-btn,
+.app.mobile .dialog-actions .secondary-btn,
+.app.mobile .dialog-actions .danger-btn {
+  margin-top: 0;
+  padding: 11px 18px;
+  border-radius: 9px;
+  font-size: 16px;
+}
+
+/* ---------- Bekræftelse (ConfirmDialog) og fejl i dialoger ---------- */
+
+.dialog-text {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.dialog-error {
+  margin-top: -4px;
+  font-size: 12.5px;
+  color: var(--danger);
+}
+
+.danger-btn {
+  background: var(--danger);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 7px 16px;
+  border-radius: 7px;
+}
+
+/* ---------- Kort besked (Notice), desktop og mobil ---------- */
+
+/* 0 px høj i flowet lige over status-/værktøjslinjen; beskeden rager op */
+.notice-anchor {
+  position: relative;
+  z-index: 60;
+  flex-shrink: 0;
+  height: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
+  pointer-events: none;
+}
+
+.notice {
+  max-width: 440px;
+  margin-bottom: 10px;
+  padding: 7px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--bg-header);
+  box-shadow: var(--shadow-menu);
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text);
+  text-align: center;
+  overflow-wrap: anywhere;
+  animation: mw-notice-in 0.18s ease-out;
+  transition: opacity 0.18s ease-in, transform 0.18s ease-in;
+}
+
+.notice.leaving {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.app.mobile .notice {
+  max-width: 100%;
+  padding: 9px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+/* læsetilstand: ingen værktøjslinje under beskeden, kun hjemmeindikatoren */
+.app.mobile .main > .notice-anchor:last-child .notice {
+  margin-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+@keyframes mw-notice-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* ---------- Bundark (ContextMenu med sheet) ---------- */
+
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 0 max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom))
+    max(8px, env(safe-area-inset-left));
+  background: rgba(20, 18, 16, 0.3);
+  animation: mw-fade-in 0.15s ease-out;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: mw-sheet-in 0.2s ease-out;
+}
+
+.sheet-group {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-header);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.sheet-title {
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--text-faint);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-item {
+  min-height: 56px;
+  padding: 0 16px;
+  border-top: 1px solid var(--hairline);
+  font-size: 18px;
+  color: var(--accent);
+  text-align: center;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+.sheet-group > .sheet-item:first-child {
+  border-top: none;
+}
+
+.sheet-item:active {
+  background: var(--bg-hover);
+}
+
+.sheet-item.danger {
+  color: var(--danger);
+}
+
+.sheet-cancel {
+  border-top: none;
+  border-radius: 14px;
+  background: var(--bg-header);
+  font-weight: 600;
+}
+
+@keyframes mw-sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes mw-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-overlay,
+  .sheet {
+    animation: none;
+  }
+}

@@ -22,6 +22,22 @@ const SHORTCUTS: Array<[string, string]> = [
   ["Højreklik på et ord", "Staveforslag (macOS)"],
 ];
 
+// fx "2. okt. 2026 kl. 16.10"
+function buildDate(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const date = d.toLocaleDateString("da-DK", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const time = d.toLocaleTimeString("da-DK", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${date} kl. ${time}`;
+}
+
 export default function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   return (
     <div className="dialog-overlay" onMouseDown={onClose}>
@@ -39,6 +55,17 @@ export default function ShortcutsDialog({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <div className="dialog-actions">
+          <span
+            style={{
+              marginRight: "auto",
+              alignSelf: "center",
+              fontSize: 11.5,
+              color: "var(--text-faint)",
+              userSelect: "text",
+            }}
+          >
+            Version {__APP_VERSION__} · bygget {buildDate(__BUILD_TIME__)}
+          </span>
           <button className="secondary-btn" onClick={onClose}>
             Luk
           </button>

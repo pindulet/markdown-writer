@@ -6,3 +6,4 @@ src-tauri/gen/
 
 # genereret designfil (kilderne er .dc.html + canvas.json)
 design/markdown-writer-mockup.html
+dist-web/

@@ -1,0 +1,174 @@
+/* Editorerne på telefonen og formateringslinjen over tastaturet. Reglerne
+   gælder kun under .app.mobile eller (pointer: coarse), så desktop ser ud som
+   før — undtagen tabel-wrapperen, som desktop også har gavn af. Tekststørrelse,
+   margener og tjeklisternes label ligger i mobile.css. Filen indlæses før
+   styles.css, så reglerne skal være mindst lige så specifikke som dem dér. */
+
+/* ---------- Tabeller: rul vandret i stedet for at sprænge kolonnen ---------- */
+
+/* div.tableWrapper kommer fra Table.configure({ renderWrapper: true }) */
+.layout-content .tableWrapper {
+  overscroll-behavior-x: contain;
+}
+
+/* smalle kolonner ombryder ord for ord; hellere rulle fra fjerde kolonne */
+.app.mobile .layout-content th,
+.app.mobile .layout-content td {
+  min-width: 5em;
+}
+
+/* ---------- Touch: 16 px gulv for alt redigerbart (ellers zoomer iOS ind) ---------- */
+
+@media (pointer: coarse) {
+  .app .layout-content {
+    font-size: max(16px, calc(17px * var(--editor-zoom)));
+  }
+
+  .app .markdown-editor .cm-scroller {
+    font-size: max(16px, calc(14.5px * var(--editor-zoom)));
+  }
+
+  .app input,
+  .app textarea,
+  .app select {
+    font-size: max(16px, 1em);
+  }
+
+  .app {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* ---------- Links og tjekbokse ---------- */
+
+/* et langt tryk må ikke give iOS' "Åbn"-menu, som ville navigere væk fra appen */
+.app.mobile .layout-content a,
+.app.mobile .layout-content img {
+  -webkit-touch-callout: none;
+}
+
+/* trykflade på 44 × 45 px om den 15 px store boks, mest ud i margenen, så
+   et tryk i starten af teksten stadig sætter markøren */
+.app.mobile .layout-content ul[data-type="taskList"] > li input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  inset: -15px -9px -15px -20px;
+}
+
+/* ---------- Formateringslinjen (FormatToolbar) ---------- */
+
+.app.mobile .format-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background: var(--bg-header);
+  border-top: 1px solid var(--hairline);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* lige over tastaturet er der ingen hjemmeindikator at holde afstand til */
+html.kb-open .app.mobile .format-toolbar {
+  padding-bottom: 0;
+}
+
+.app.mobile .ft-scroll {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.app.mobile .ft-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.app.mobile .ft-btn {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 4px;
+  border-radius: 9px;
+  color: var(--text-muted);
+  touch-action: manipulation;
+}
+
+.app.mobile .ft-btn:active {
+  background: var(--bg-active);
+}
+
+.app.mobile .ft-btn.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.app.mobile .ft-btn[aria-disabled="true"] {
+  opacity: 0.35;
+  background: none;
+}
+
+.app.mobile .ft-btn.ft-text {
+  padding: 0 12px;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.app.mobile .ft-btn.ft-table {
+  color: var(--accent);
+}
+
+.app.mobile .ft-btn.danger {
+  color: var(--danger);
+}
+
+/* "Skjul tastatur" står fast yderst til højre, adskilt af en hårstreg */
+.app.mobile .ft-end {
+  margin: 0 4px 0 2px;
+}
+
+.app.mobile .ft-end::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: 11px;
+  bottom: 11px;
+  width: 1px;
+  background: var(--hairline);
+}
+
+.app.mobile .ft-glyph {
+  font-family: var(--serif);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.app.mobile .ft-bold {
+  font-weight: 700;
+}
+
+.app.mobile .ft-italic {
+  font-style: italic;
+}
+
+.app.mobile .ft-heading {
+  font-weight: 600;
+}
+
+.app.mobile .ft-heading sub {
+  position: relative;
+  top: 2px;
+  margin-left: 1px;
+  font-size: 11px;
+  vertical-align: baseline;
+}

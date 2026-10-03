@@ -1,0 +1,52 @@
+# Bygger mobilversionen (iPhone-PWA) og udruller den til GitHub Pages ved hvert
+# push til main. Fejler test eller build, udrulles intet, og telefonen beholder
+# den seneste gode version. Bygget kræver ingen secrets.
+name: Mobilversion → GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Hele kørsler (build + deploy) står i kø i push-rækkefølge: en igangværende
+# gøres færdig, og kun den nyeste ventende beholdes, så den nyeste commit altid
+# udrulles sidst. Jobbene må ikke have concurrency i samme gruppe (deadlock).
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:web
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist-web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

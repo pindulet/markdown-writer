@@ -5,6 +5,7 @@
 // Claude ændrer en fil på disken.
 
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { createGitHubBackend } from "./web/githubBackend";
 
 export interface FileEntry {
   name: string;
@@ -24,7 +25,7 @@ export interface GitSyncResult {
   detail: string;
 }
 
-interface Backend {
+export interface Backend {
   listFolder(path: string): Promise<FolderListing>;
   readFile(path: string): Promise<string>;
   writeFile(path: string, content: string): Promise<void>;
@@ -40,6 +41,8 @@ interface Backend {
   openUrl(url: string): Promise<void>;
   onFsChange(cb: (paths: string[]) => void): () => void;
   onOpenFile(cb: (paths: string[]) => void): () => void;
+  // fremdrift for en lang synk (fx telefonens første hentning af alle noter)
+  onSyncProgress(cb: (progress: { done: number; total: number } | null) => void): () => void;
   frontendReady(): Promise<string[]>;
   aiKeyPresent(): Promise<boolean>;
   aiSetKey(key: string): Promise<void>;
@@ -51,7 +54,17 @@ interface Backend {
   ): Promise<string>;
 }
 
-const isTauri = "__TAURI_INTERNALS__" in window;
+// web-buildet kører aldrig i Tauri; konstanten lader bundleren se det
+const isTauri = import.meta.env.MODE !== "web" && "__TAURI_INTERNALS__" in window;
+
+// desktop = Tauri-appen; web = mobil-/webudgaven (GitHub Pages, noter via
+// GitHubs API); mock = `npm run dev` i en almindelig browser
+export type Platform = "desktop" | "web" | "mock";
+export const platform: Platform = isTauri
+  ? "desktop"
+  : import.meta.env.MODE === "web"
+    ? "web"
+    : "mock";
 
 function createTauriBackend(): Backend {
   return {
@@ -136,6 +149,7 @@ function createTauriBackend(): Backend {
         if (unlisten) unlisten();
       };
     },
+    onSyncProgress: () => () => {},
     frontendReady: async () => {
       const { invoke } = await import("@tauri-apps/api/core");
       return invoke<string[]>("frontend_ready");
@@ -272,6 +286,7 @@ function createMockBackend(): Backend {
       return () => subs.delete(cb);
     },
     onOpenFile: () => () => {},
+    onSyncProgress: () => () => {},
     frontendReady: async () => [],
     aiKeyPresent: async () => true,
     aiSetKey: async () => {},
@@ -284,7 +299,12 @@ function createMockBackend(): Backend {
   };
 }
 
-const backend: Backend = isTauri ? createTauriBackend() : createMockBackend();
+const backend: Backend =
+  platform === "desktop"
+    ? createTauriBackend()
+    : platform === "web"
+      ? createGitHubBackend()
+      : createMockBackend();
 
 export const listFolder = backend.listFolder;
 export const readFile = backend.readFile;
@@ -293,8 +313,25 @@ export const createFile = backend.createFile;
 export const createFolder = backend.createFolder;
 export const saveImage = backend.saveImage;
 
-// Absolut filsti → URL webviewet kan vise (asset-protokollen i Tauri)
+// Lille pladsholder i appens dæmpede farver, hvor et billede ikke kan vises
+export function imagePlaceholder(text: string): string {
+  const w = Math.round(56 + text.length * 7.4); // ca. bredden af 14 px systemskrift
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="44" viewBox="0 0 ${w} 44">` +
+    "<style>rect{fill:#f2f0ec;stroke:rgba(30,28,24,.12)}path{fill:none;stroke:#a09a8e}" +
+    "text{fill:#6d6860;font:14px -apple-system,system-ui,sans-serif}" +
+    "@media (prefers-color-scheme:dark){rect{fill:#262320;stroke:rgba(255,253,250,.12)}" +
+    "path{stroke:#7d776e}text{fill:#a39d94}}</style>" +
+    `<rect x=".5" y=".5" width="${w - 1}" height="43" rx="8"/>` +
+    '<path d="M14.5 15.5h17v13h-17zM14.5 26l5-5 4 4 3-3 5 5" stroke-width="1.4" stroke-linejoin="round"/>' +
+    `<text x="42" y="27">${text}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+// Absolut filsti → URL webviewet kan vise (asset-protokollen i Tauri).
+// På telefonen findes vaultens billeder ikke (de holdes ude af git).
 export function resolveAsset(absPath: string): string {
+  if (platform === "web") return imagePlaceholder("Billede kun på computeren");
   return isTauri ? convertFileSrc(absPath) : absPath;
 }
 export const renameFile = backend.renameFile;
@@ -306,6 +343,7 @@ export const pickFolder = backend.pickFolder;
 export const openUrl = backend.openUrl;
 export const onFsChange = backend.onFsChange;
 export const onOpenFile = backend.onOpenFile;
+export const onSyncProgress = backend.onSyncProgress;
 export const frontendReady = backend.frontendReady;
 export const aiKeyPresent = backend.aiKeyPresent;
 export const aiSetKey = backend.aiSetKey;

@@ -1,0 +1,531 @@
+/* ---------- Web/mobil: opsætning og indstillinger ---------- */
+
+:root {
+  --web-danger: #c23b2e;
+  --web-danger-soft: rgba(194, 59, 46, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --web-danger: #e3705f;
+    --web-danger-soft: rgba(227, 112, 95, 0.14);
+  }
+}
+
+.setup-screen button,
+.settings-overlay button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* ---------- Opsætning ---------- */
+
+/* følger den synlige del af skærmen (src/viewport.ts), så feltet med
+   fokus kan rulles til syne over tastaturet */
+.setup-screen {
+  position: fixed;
+  top: var(--vvtop, 0px);
+  left: 0;
+  right: 0;
+  height: var(--vvh, 100%);
+  z-index: 400;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background: var(--bg-editor);
+  color: var(--text);
+  padding: calc(env(safe-area-inset-top) + 40px) max(20px, env(safe-area-inset-right))
+    calc(env(safe-area-inset-bottom) + 32px) max(20px, env(safe-area-inset-left));
+}
+
+/* inde i appen (Indstillinger → Skift adgangsnøgle): .app.mobile er allerede
+   placeret efter den synlige del, og dens transform gør den til containing
+   block for position: fixed, så --vvtop må ikke lægges til en gang til */
+.app.mobile .setup-screen {
+  top: 0;
+  height: 100%;
+}
+
+.setup-inner {
+  max-width: 440px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.setup-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-strong);
+}
+
+.setup-lead {
+  margin: -6px 0 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.setup-card {
+  background: var(--bg-header);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.setup-card-accent {
+  background: var(--banner-external-bg);
+  border-color: var(--banner-external-border);
+  color: var(--banner-external-text);
+}
+
+.setup-card-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.setup-text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.setup-text + .setup-text {
+  margin-top: 10px;
+}
+
+.setup-text-muted {
+  font-size: 14.5px;
+  opacity: 0.85;
+}
+
+.setup-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setup-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.setup-input {
+  width: 100%;
+  min-height: 48px;
+  /* 16 px: mindre får iOS til at zoome ind, når feltet får fokus */
+  font-size: 16px;
+  font-family: inherit;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--hairline);
+  background: var(--bg-header);
+  color: var(--text-strong);
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.setup-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.setup-input::placeholder {
+  color: var(--text-faint);
+}
+
+.setup-static {
+  font-size: 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--bg-segment);
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.setup-hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.setup-card .setup-hint {
+  margin-top: 10px;
+}
+
+.setup-token {
+  position: relative;
+  display: flex;
+}
+
+.setup-token .setup-input {
+  padding-right: 64px;
+  font-family: var(--mono);
+}
+
+.setup-reveal {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  min-width: 60px;
+  padding: 0 14px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.setup-advanced summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-muted);
+  list-style: none;
+}
+
+.setup-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.setup-advanced summary::before {
+  content: "›";
+  display: inline-block;
+  width: 16px;
+  font-size: 18px;
+  transition: transform 0.15s ease;
+}
+
+.setup-advanced[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.setup-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: -10px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.setup-link::after {
+  content: " ↗";
+  white-space: pre;
+}
+
+.setup-steps {
+  margin: 4px 0 0;
+  padding-left: 22px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.setup-steps li + li {
+  margin-top: 4px;
+}
+
+.setup-error {
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--web-danger);
+  background: var(--web-danger-soft);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.setup-btn {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.setup-btn:disabled {
+  opacity: 0.6;
+}
+
+.setup-btn-secondary {
+  background: var(--bg-segment);
+  color: var(--text-strong);
+  font-weight: 500;
+}
+
+.setup-btn + .setup-btn {
+  margin-top: -8px;
+}
+
+/* ---------- Indstillinger (bundark) ---------- */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(20, 18, 16, 0.32);
+  animation: settings-fade 0.18s ease-out;
+  /* iOS sender kun klik på baggrunden (luk arket), hvis den ligner noget klikbart */
+  cursor: pointer;
+}
+
+.settings-sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: calc(100% - env(safe-area-inset-top) - 16px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background: var(--bg-header);
+  color: var(--text);
+  border-radius: 14px 14px 0 0;
+  box-shadow: var(--shadow-menu);
+  padding: 0 max(0px, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom) + 16px)
+    max(0px, env(safe-area-inset-left));
+  animation: settings-up 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  cursor: default;
+}
+
+@keyframes settings-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes settings-up {
+  from {
+    transform: translateY(40px);
+    opacity: 0.6;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-overlay,
+  .settings-sheet {
+    animation: none;
+  }
+}
+
+/* bred skærm (fx web-udgaven på computeren): dialog i midten */
+@media (min-width: 701px) and (pointer: fine) {
+  .settings-overlay {
+    align-items: center;
+  }
+
+  .settings-sheet {
+    border-radius: 14px;
+    max-height: 86vh;
+    padding-bottom: 16px;
+  }
+
+  .settings-grabber {
+    display: none;
+  }
+}
+
+.settings-grabber {
+  width: 36px;
+  height: 5px;
+  margin: 8px auto 0;
+  border-radius: 3px;
+  background: var(--hairline);
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 16px 4px 20px;
+}
+
+.settings-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.settings-done {
+  min-height: 44px;
+  padding: 0 4px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.settings-section {
+  padding: 10px 16px 6px;
+}
+
+.settings-section-title {
+  margin: 0 4px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.settings-group {
+  background: var(--bg-editor);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 50px;
+  padding: 11px 14px;
+  font-size: 16px;
+  line-height: 1.35;
+  color: var(--text-strong);
+  text-align: left;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.settings-row:first-child {
+  border-top: none;
+}
+
+.settings-row-main {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-sub {
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.settings-sub-plain {
+  margin-top: 0;
+}
+
+.settings-sub a,
+.settings-note a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.settings-warn-text {
+  color: var(--banner-external-text);
+}
+
+.settings-action {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.settings-action.strong {
+  font-weight: 700;
+}
+
+.settings-action.danger {
+  color: var(--web-danger);
+}
+
+.settings-action:active:not(:disabled) {
+  background: var(--bg-active);
+}
+
+.settings-action:disabled {
+  color: var(--text-faint);
+}
+
+.settings-zoom {
+  justify-content: space-between;
+}
+
+.settings-zoom-btn {
+  min-width: 56px;
+  min-height: 40px;
+  border-radius: 10px;
+  background: var(--bg-segment);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.settings-zoom-btn:disabled {
+  color: var(--text-faint);
+}
+
+.settings-zoom-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+}
+
+.settings-note {
+  margin: 8px 4px 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.settings-text {
+  margin: 4px 4px 12px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.settings-alert {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--web-danger);
+  background: var(--web-danger-soft);
+}
+
+.settings-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.settings-btn {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 12px;
+  background: var(--bg-segment);
+  color: var(--text-strong);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.settings-btn-danger {
+  background: var(--web-danger);
+  color: #fff;
+  font-weight: 600;
+}
+
+.settings-btn:disabled {
+  opacity: 0.6;
+}

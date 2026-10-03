@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import * as fsApi from "./backend";
 import { mergeThreeWay } from "./diff";
+import { cleanNoteName } from "./web/names";
 
 export type ViewMode = "markdown" | "layout";
 
@@ -23,6 +24,7 @@ export interface Doc {
   claudeUpdated: boolean; // ekstern ændring, endnu ikke set (prik på fane/fil)
   showExternalBanner: boolean;
   prevContent: string | null; // indhold før seneste eksterne opdatering (Fortryd)
+  externalContent: string | null; // indholdet lige efter den eksterne opdatering
   conflict: string | null; // diskens indhold, når vi selv har ugemte ændringer
   lastSavedAt: number | null;
   lastExternalAt: number | null;
@@ -53,6 +55,9 @@ interface Store {
   aiModel: AiModel; // hvilken model der laver forslagene
   aiKeyDialogOpen: boolean;
   aiLastError: string | null; // seneste fejl fra forslags-kaldet, vises i statusbaren
+  syncProgress: { done: number; total: number } | null; // fx telefonens første hentning
+  editing: boolean; // mobil: noten er i redigeringstilstand (ellers læsetilstand)
+  notice: string | null; // kort besked til brugeren (vises som toast), rydder sig selv
 
   init: () => Promise<void>;
   setFolder: (path: string) => Promise<void>;
@@ -72,10 +77,15 @@ interface Store {
   setView: (view: ViewMode) => void;
   toggleView: () => void;
   toggleSidebar: () => void;
+  setSidebarVisible: (visible: boolean) => void;
+  setEditing: (editing: boolean) => void;
+  // sand = intet er ugemt bagefter (ingen doc er beskidt eller i konflikt)
+  flushAll: () => Promise<boolean>;
   setNewNoteOpen: (open: boolean, dir?: string) => void;
   setNewFolderParent: (parent: string | null) => void;
   setShortcutsOpen: (open: boolean) => void;
   setZoom: (zoom: number) => void;
+  showNotice: (text: string) => void;
   toggleAi: () => void;
   setAiError: (err: string | null) => void;
   setAiModel: (model: AiModel) => void;
@@ -91,6 +101,24 @@ interface Store {
 
 const saveTimers = new Map<string, number>();
 let refreshTimer: number | null = null;
+let noticeTimer: number | null = null;
+const NOTICE_MS = 4_000;
+
+// Telefonens CSS har et gulv på 16 px (ellers zoomer iOS), så mindre end 100 %
+// gør kun overskrifterne mindre end brødteksten
+export function minZoom(): number {
+  return fsApi.platform === "web" ? 1 : 0.7;
+}
+const MAX_ZOOM = 1.6;
+
+// Mål i et [[wikilink]], der er en anden filtype end en note (bilag.pdf, foto.png)
+function isAttachmentName(name: string): boolean {
+  const base = name.slice(name.lastIndexOf("/") + 1);
+  return /\.[a-z][a-z0-9]{0,4}$/i.test(base) && !/\.md$/i.test(base);
+}
+
+// Navne sammenlignes uden hensyn til NFC/NFD og store/små bogstaver
+const nameKey = (s: string) => s.normalize("NFC").toLowerCase();
 
 // Seneste indhold, vi selv har skrevet pr. fil. Watcher-events for vores
 // egne skrivninger kan ankomme, EFTER brugeren har tastet videre — uden
@@ -104,8 +132,9 @@ async function writeOwn(path: string, content: string): Promise<void> {
 }
 
 // Git-synk: kør aldrig to synk samtidig; ændringer under en kørende synk
-// udløser én opfølgende. Debounce samler skriverier i ét commit.
-const SYNC_DEBOUNCE_MS = 20_000;
+// udløser én opfølgende. Debounce samler skriverier i ét commit. Telefonen
+// lukkes tit hurtigt efter en redigering, så dér synkes der hurtigere.
+const SYNC_DEBOUNCE_MS = fsApi.platform === "web" ? 15_000 : 20_000;
 let syncTimer: number | null = null;
 let syncRunning = false;
 let syncQueued = false;
@@ -119,6 +148,7 @@ function newDoc(path: string, content: string): Doc {
     claudeUpdated: false,
     showExternalBanner: false,
     prevContent: null,
+    externalContent: null,
     conflict: null,
     lastSavedAt: null,
     lastExternalAt: null,
@@ -166,6 +196,9 @@ export const useStore = create<Store>((set, get) => ({
   aiModel: AI_MODELS[0].id,
   aiKeyDialogOpen: false,
   aiLastError: null,
+  syncProgress: null,
+  editing: false,
+  notice: null,
 
   init: async () => {
     let folder: string | null = null;
@@ -179,7 +212,7 @@ export const useStore = create<Store>((set, get) => ({
       const v = localStorage.getItem("mw.view");
       if (v === "markdown" || v === "layout") view = v;
       const z = Number(localStorage.getItem("mw.zoom"));
-      if (z >= 0.7 && z <= 1.6) get().setZoom(z);
+      if (z >= 0.7 && z <= MAX_ZOOM) get().setZoom(z); // setZoom løfter til gulvet på web
       if (localStorage.getItem("mw.ai") === "0") set({ aiEnabled: false });
       const m = AI_MODELS.find((x) => x.id === localStorage.getItem("mw.aiModel"));
       if (m) set({ aiModel: m.id });
@@ -187,6 +220,7 @@ export const useStore = create<Store>((set, get) => ({
       // ignorer korrupt session
     }
     set({ view });
+    fsApi.onSyncProgress((progress) => set({ syncProgress: progress }));
     // uden nøgle vises "nøgle mangler" i statusbaren; klik åbner dialogen
     void fsApi
       .aiKeyPresent()
@@ -278,29 +312,55 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   // [[Wikilink]]: find noten på navn (uanset mappe); findes den ikke,
-  // oprettes den i rodmappen — som i Obsidian
+  // oprettes den i rodmappen — som i Obsidian. Bilag oprettes aldrig som note.
   openWikilink: async (target: string) => {
-    const raw = (target.split("|")[0] ?? "").split("#")[0].trim();
-    if (!raw) return;
+    // i tabeller escapes aliasets streg ([[Note\|alias]]); en løs backslash
+    // kan også blive hængende sidst i målet
+    const raw = (target.replace(/\\\|/g, "|").split("|")[0] ?? "")
+      .split("#")[0]
+      .replace(/\\+$/, "")
+      .trim();
+    const name = raw.replace(/\.md$/i, "").trim();
+    if (!name) return;
     const { files, folder } = get();
-    const found = files.find((f) => f.name.toLowerCase() === raw.toLowerCase());
+    // på telefonen renses nye notenavne (fx ":" → "-"), så [[Møde: referat]]
+    // skal også finde noten "Møde- referat", ellers oprettes den igen og igen
+    const want = nameKey(name);
+    const cleaned = fsApi.platform === "web" ? nameKey(cleanNoteName(name)) : want;
+    const byPath = want.includes("/"); // [[Mappe/Note]]
+    const found = files.find((f) => {
+      if (byPath) {
+        const rel = nameKey(f.rel_dir ? `${f.rel_dir}/${f.name}` : f.name);
+        return rel === want || rel.endsWith(`/${want}`);
+      }
+      const key = nameKey(f.name);
+      return key === want || key === cleaned;
+    });
     if (found) {
       await get().openFile(found.path);
       return;
     }
+    if (isAttachmentName(name)) {
+      get().showNotice(
+        fsApi.platform === "web" ? "Bilag kan kun åbnes på computeren" : "Bilaget findes ikke som note"
+      );
+      return;
+    }
     if (!folder) return;
-    const path = await fsApi.createFile(folder, raw);
+    const path = await fsApi.createFile(folder, name);
     await get().refreshFiles();
     await get().openFile(path);
   },
 
   activate: (path: string) => {
-    const { docs, changedFiles } = get();
+    const { docs, changedFiles, activePath } = get();
     const doc = docs[path];
     const nextChanged = { ...changedFiles };
     delete nextChanged[path];
     set({
       activePath: path,
+      // mobil: en anden note åbnes altid i læsetilstand
+      editing: path === activePath ? get().editing : false,
       changedFiles: nextChanged,
       docs: doc ? { ...docs, [path]: { ...doc, claudeUpdated: false } } : docs,
     });
@@ -420,6 +480,7 @@ export const useStore = create<Store>((set, get) => ({
             [path]: {
               ...fresh,
               prevContent: fresh.content,
+              externalContent: disk,
               content: disk,
               baseContent: disk,
               missing: false,
@@ -429,6 +490,37 @@ export const useStore = create<Store>((set, get) => ({
             },
           },
         });
+      } else if (fsApi.platform === "web") {
+        // telefonen: flet straks. Et konfliktbanner ville stoppe al gemning,
+        // og iOS lukker appen tit i baggrunden — så var det skrevne tabt.
+        // Fortryd giver brugerens egen version tilbage.
+        const merged = mergeThreeWay(fresh.baseContent, fresh.content, disk);
+        const isActive = get().activePath === path;
+        set({
+          docs: {
+            ...get().docs,
+            [path]: {
+              ...fresh,
+              prevContent: fresh.content,
+              externalContent: merged,
+              content: merged,
+              baseContent: merged,
+              dirty: false,
+              missing: false,
+              claudeUpdated: !isActive,
+              showExternalBanner: true,
+              lastExternalAt: Date.now(),
+            },
+          },
+        });
+        try {
+          await writeOwn(path, merged);
+          get().scheduleSync();
+        } catch {
+          // næste gem prøver igen
+          const current = get().docs[path];
+          if (current) set({ docs: { ...get().docs, [path]: { ...current, dirty: true } } });
+        }
       } else {
         // konflikt: brugeren bestemmer
         set({
@@ -476,6 +568,7 @@ export const useStore = create<Store>((set, get) => ({
           [path]: {
             ...doc,
             prevContent: doc.content,
+            externalContent: doc.conflict,
             content: doc.conflict,
             baseContent: doc.conflict,
             conflict: null,
@@ -502,6 +595,7 @@ export const useStore = create<Store>((set, get) => ({
         [path]: {
           ...doc,
           prevContent: mine,
+          externalContent: merged,
           content: merged,
           baseContent: merged,
           conflict: null,
@@ -526,7 +620,18 @@ export const useStore = create<Store>((set, get) => ({
   undoExternal: async (path: string) => {
     const doc = get().docs[path];
     if (!doc || doc.prevContent === null) return;
-    const restored = doc.prevContent;
+    // Har brugeren skrevet videre efter opdateringen, fjernes kun den
+    // eksterne ændring: trevejs-fletning med opdateringen som udgangspunkt,
+    // så det nyskrevne bliver stående
+    const restored =
+      doc.externalContent !== null && doc.content !== doc.externalContent
+        ? mergeThreeWay(doc.externalContent, doc.content, doc.prevContent)
+        : doc.prevContent;
+    const timer = saveTimers.get(path);
+    if (timer) {
+      window.clearTimeout(timer);
+      saveTimers.delete(path);
+    }
     set({
       docs: {
         ...get().docs,
@@ -535,6 +640,7 @@ export const useStore = create<Store>((set, get) => ({
           content: restored,
           baseContent: restored,
           prevContent: null,
+          externalContent: null,
           showExternalBanner: false,
           claudeUpdated: false,
           dirty: false,
@@ -566,6 +672,23 @@ export const useStore = create<Store>((set, get) => ({
 
   toggleSidebar: () => set({ sidebarVisible: !get().sidebarVisible }),
 
+  setSidebarVisible: (visible: boolean) => set({ sidebarVisible: visible }),
+
+  setEditing: (editing: boolean) => set({ editing }),
+
+  // Gem alle ugemte ændringer med det samme (fx når telefonen lægger appen
+  // i baggrunden, eller før appen genindlæses til en ny version)
+  flushAll: async () => {
+    for (const [path, timer] of saveTimers) {
+      window.clearTimeout(timer);
+      saveTimers.delete(path);
+    }
+    const dirty = Object.values(get().docs).filter((d) => d.dirty);
+    await Promise.all(dirty.map((d) => get().saveNow(d.path)));
+    // saveNow sluger fejl og springer konflikter over: se efter, hvad der stadig er ugemt
+    return Object.values(get().docs).every((d) => !d.dirty && d.conflict === null);
+  },
+
   setNewNoteOpen: (open: boolean, dir?: string) =>
     set({ newNoteOpen: open, newNoteDir: dir ?? "" }),
 
@@ -575,7 +698,7 @@ export const useStore = create<Store>((set, get) => ({
 
   setZoom: (zoom: number) => {
     // afrundes til ét decimal, så gentagne tryk ikke driver i flydende tal
-    const clamped = Math.round(Math.min(1.6, Math.max(0.7, zoom)) * 10) / 10;
+    const clamped = Math.round(Math.min(MAX_ZOOM, Math.max(minZoom(), zoom)) * 10) / 10;
     set({ zoom: clamped });
     document.documentElement.style.setProperty("--editor-zoom", String(clamped));
     try {
@@ -585,7 +708,18 @@ export const useStore = create<Store>((set, get) => ({
     }
   },
 
+  showNotice: (text: string) => {
+    if (noticeTimer) window.clearTimeout(noticeTimer);
+    set({ notice: text });
+    noticeTimer = window.setTimeout(() => {
+      noticeTimer = null;
+      set({ notice: null });
+    }, NOTICE_MS);
+  },
+
   toggleAi: () => {
+    // AI-forslag kører via Rust-siden og findes kun på computeren
+    if (fsApi.platform === "web") return;
     if (!get().aiAvailable) {
       set({ aiKeyDialogOpen: true });
       return;
@@ -653,7 +787,7 @@ export const useStore = create<Store>((set, get) => ({
     const doc = docs[path];
     const nextDocs = { ...docs };
     delete nextDocs[path];
-    if (doc) nextDocs[newPath] = { ...doc, path: newPath };
+    if (doc) nextDocs[newPath] = { ...doc, path: newPath, missing: false };
     set({
       tabs: tabs.map((t) => (t === path ? newPath : t)),
       docs: nextDocs,
@@ -665,8 +799,19 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   removeNote: async (path: string) => {
-    await fsApi.deleteFile(path);
+    // luk fanen uden at gemme ugemte tastetryk — ellers genskaber gemningen
+    // den note, der netop er slettet
+    const timer = saveTimers.get(path);
+    if (timer) {
+      window.clearTimeout(timer);
+      saveTimers.delete(path);
+    }
+    const doc = get().docs[path];
+    if (doc?.dirty) {
+      set({ docs: { ...get().docs, [path]: { ...doc, dirty: false } } });
+    }
     if (get().tabs.includes(path)) get().closeTab(path);
+    await fsApi.deleteFile(path);
     await get().refreshFiles();
     get().scheduleSync();
   },
@@ -706,7 +851,9 @@ export const useStore = create<Store>((set, get) => ({
       syncRunning = false;
       if (syncQueued) {
         syncQueued = false;
-        get().scheduleSync();
+        // telefonen: straks — en timer står stille, når iOS har lagt appen væk
+        if (fsApi.platform === "web") void get().syncNow();
+        else get().scheduleSync();
       }
     }
   },

@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+// Editorerne gemmer selv markeringen, før dialogen åbnes, og sætter den
+// igen ved Indsæt (på iOS ryger markøren ellers til starten af noten)
 export default function LinkDialog({
   onSubmit,
   onClose,
@@ -24,6 +26,12 @@ export default function LinkDialog({
           autoFocus
           value={url}
           placeholder="https://…"
+          // telefonens URL-tastatur, uden stort begyndelsesbogstav og autokorrektur
+          inputMode="url"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="done"
           onChange={(e) => setUrl(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();

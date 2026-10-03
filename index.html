@@ -2,8 +2,22 @@
 <html lang="da">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f6f4f1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#2a2724" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="MD Writer" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/icons/favicon-64.png" />
     <title>Markdown Writer</title>
+    <!-- papirfarve fra første billede, så der ikke blinker hvidt før CSS'en er indlæst -->
+    <style>
+      html { background: #f2f0ec; }
+      @media (prefers-color-scheme: dark) { html { background: #262320; } }
+    </style>
   </head>
   <body>
     <div id="root"></div>

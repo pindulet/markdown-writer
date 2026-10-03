@@ -5,6 +5,8 @@ export default function PromptDialog({
   placeholder,
   submitLabel,
   inputType = "text",
+  initialValue,
+  error,
   onSubmit,
   onClose,
 }: {
@@ -12,10 +14,12 @@ export default function PromptDialog({
   placeholder: string;
   submitLabel: string;
   inputType?: string;
+  initialValue?: string; // fx det nuværende navn ved omdøbning
+  error?: string; // vises under feltet (fx når navnet er optaget)
   onSubmit: (value: string) => void;
   onClose: () => void;
 }) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(initialValue ?? "");
 
   const submit = () => {
     const trimmed = value.trim();
@@ -33,12 +37,14 @@ export default function PromptDialog({
           type={inputType}
           value={value}
           placeholder={placeholder}
+          onFocus={initialValue ? (e) => e.currentTarget.select() : undefined}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") submit();
             if (e.key === "Escape") onClose();
           }}
         />
+        {error && <div className="dialog-error">{error}</div>}
         <div className="dialog-actions">
           <button className="secondary-btn" onClick={onClose}>
             Annuller

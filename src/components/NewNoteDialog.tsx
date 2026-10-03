@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useStore } from "../store";
+import { isMobileNow } from "../useIsMobile";
+import { keepKeyboard, releaseKeyboard } from "../keyboardKeeper";
 
 export default function NewNoteDialog({ onClose }: { onClose: () => void }) {
   const allDirs = useStore((s) => s.dirs);
@@ -17,7 +19,28 @@ export default function NewNoteDialog({ onClose }: { onClose: () => void }) {
 
   const submit = () => {
     const trimmed = name.trim();
-    if (trimmed) void useStore.getState().newNote(trimmed, dir);
+    if (trimmed) {
+      const mobile = isMobileNow();
+      // iOS: skal ske synkront i trykket, før dialogens felt forsvinder
+      if (mobile) keepKeyboard();
+      const created = useStore.getState().newNote(trimmed, dir);
+      if (mobile) {
+        // mobil: en ny note åbnes direkte i redigeringstilstand
+        created.then(
+          () => {
+            const s = useStore.getState();
+            s.setEditing(true);
+            s.setSidebarVisible(false);
+          },
+          (e: unknown) => {
+            releaseKeyboard();
+            console.error("Noten kunne ikke oprettes", e);
+          }
+        );
+      } else {
+        void created;
+      }
+    }
     onClose();
   };
 

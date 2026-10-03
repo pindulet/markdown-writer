@@ -1,9 +1,14 @@
-import { resolveAsset, saveImage } from "./backend";
+import { imagePlaceholder, platform, resolveAsset, saveImage } from "./backend";
 import { useStore } from "./store";
 
 // Relativ billedsti i markdown → URL webviewet kan vise.
 // "./x.png" er relativ til notens egen mappe; "Billeder/x.png" til vaultens rod.
 export function resolveImageSrc(src: string): string {
+  // telefonens CSP viser ikke billeder fra nettet (de ville også afsløre
+  // telefonens IP-adresse for billedværten)
+  if (platform === "web" && /^https?:/i.test(src)) {
+    return imagePlaceholder("Billede fra nettet vises ikke på telefonen");
+  }
   if (!src || /^[a-z][a-z0-9+.-]*:/i.test(src)) return src; // http, https, data, asset …
   if (src.startsWith("/")) return resolveAsset(src);
   const { folder, activePath } = useStore.getState();
@@ -18,6 +23,8 @@ export function resolveImageSrc(src: string): string {
 // Gemmer et indsat billede i vaultens "Billeder"-mappe og returnerer den
 // relative sti til brug i markdown.
 export async function saveClipboardImage(file: File): Promise<string | null> {
+  // telefonens noter har ingen billeder (de bliver på computeren); indsæt intet
+  if (platform === "web") return null;
   const folder = useStore.getState().folder;
   if (!folder) return null;
   const bytes = new Uint8Array(await file.arrayBuffer());
