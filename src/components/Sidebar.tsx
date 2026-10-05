@@ -161,6 +161,9 @@ function SyncRow({ mobile }: { mobile: boolean }) {
   );
 }
 
+// nøgle for "Senest åbnet" blandt de sammenklappede mapper (":" findes ikke i mappenavne)
+const RECENT_KEY = ":senest";
+
 export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) {
   const files = useStore((s) => s.files);
   const dirs = useStore((s) => s.dirs);
@@ -168,6 +171,7 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
   const activePath = useStore((s) => s.activePath);
   const docs = useStore((s) => s.docs);
   const changedFiles = useStore((s) => s.changedFiles);
+  const recent = useStore((s) => s.recent);
   const mobile = useIsMobile();
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -185,6 +189,12 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
   const suppressClick = useRef(false);
 
   const tree = useMemo(() => buildTree(files, dirs), [files, dirs]);
+
+  // genveje til de senest åbnede noter, der stadig findes i mappen
+  const recentFiles = useMemo(() => {
+    const byPath = new Map(files.map((f) => [f.path, f]));
+    return recent.map((p) => byPath.get(p)).filter((f): f is FileEntry => f !== undefined);
+  }, [files, recent]);
 
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -516,6 +526,33 @@ export default function Sidebar({ onPickFolder }: { onPickFolder: () => void }) 
           )
         ) : (
           <div>
+            {recentFiles.length > 0 && (
+              <div className="recent-section">
+                <div
+                  className="folder-row"
+                  style={{ paddingLeft: 10 }}
+                  onClick={clickGuard(() => toggleFolder(RECENT_KEY))}
+                >
+                  <svg
+                    className={"chevron" + (collapsed.has(RECENT_KEY) ? "" : " open")}
+                    width="10"
+                    height="10"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                  <span className="file-name">Senest åbnet</span>
+                </div>
+                {!collapsed.has(RECENT_KEY) &&
+                  // omdøbes noten, står feltet kun i træet nedenfor
+                  recentFiles.filter((f) => f.path !== renaming).map((f) => renderFile(f, 1))}
+              </div>
+            )}
             {tree.folders.map((child) => renderFolder(child, 0))}
             {tree.files.map((f) => renderFile(f, 0))}
           </div>

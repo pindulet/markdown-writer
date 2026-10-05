@@ -43,6 +43,7 @@ interface Store {
   changedFiles: Record<string, true>;
   newNoteOpen: boolean;
   newNoteDir: string; // forvalgt undermappe (rel_dir), "" = rodmappen
+  recent: string[]; // senest åbnede noter, nyeste først (genveje i sidebaren)
   newFolderParent: string | null; // null = lukket, "" = rodmappen, ellers rel_dir
   shortcutsOpen: boolean;
   gitRepo: boolean; // den valgte mappe er et git-repo
@@ -156,6 +157,33 @@ function newDoc(path: string, content: string): Doc {
   };
 }
 
+// Genveje til de senest åbnede noter; huskes mellem sessioner
+const RECENT_MAX = 5;
+
+function loadRecent(): string[] {
+  try {
+    const list = JSON.parse(localStorage.getItem("mw.recent") ?? "[]");
+    return Array.isArray(list) ? list.filter((p) => typeof p === "string").slice(0, RECENT_MAX) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveRecent(recent: string[]) {
+  try {
+    localStorage.setItem("mw.recent", JSON.stringify(recent));
+  } catch {
+    // ikke kritisk
+  }
+}
+
+// Nye noter lander i Indbakke, så en hurtig note ikke kræver et valg af mappe
+export const INBOX_DIR = "Indbakke";
+
+function defaultNoteDir(dirs: string[]): string {
+  return dirs.find((d) => d.toLowerCase() === INBOX_DIR.toLowerCase()) ?? "";
+}
+
 function persistSession(state: {
   folder: string | null;
   tabs: string[];
@@ -184,6 +212,7 @@ export const useStore = create<Store>((set, get) => ({
   changedFiles: {},
   newNoteOpen: false,
   newNoteDir: "",
+  recent: loadRecent(),
   newFolderParent: null,
   shortcutsOpen: false,
   gitRepo: false,
@@ -353,11 +382,14 @@ export const useStore = create<Store>((set, get) => ({
   },
 
   activate: (path: string) => {
-    const { docs, changedFiles, activePath } = get();
+    const { docs, changedFiles, activePath, recent } = get();
     const doc = docs[path];
     const nextChanged = { ...changedFiles };
     delete nextChanged[path];
+    const nextRecent = [path, ...recent.filter((p) => p !== path)].slice(0, RECENT_MAX);
+    saveRecent(nextRecent);
     set({
+      recent: nextRecent,
       activePath: path,
       // mobil: en anden note åbnes altid i læsetilstand
       editing: path === activePath ? get().editing : false,
@@ -689,8 +721,9 @@ export const useStore = create<Store>((set, get) => ({
     return Object.values(get().docs).every((d) => !d.dirty && d.conflict === null);
   },
 
+  // uden mappe (fx "Ny note"-knappen eller ⌘N) foreslås Indbakke
   setNewNoteOpen: (open: boolean, dir?: string) =>
-    set({ newNoteOpen: open, newNoteDir: dir ?? "" }),
+    set({ newNoteOpen: open, newNoteDir: dir ?? defaultNoteDir(get().dirs) }),
 
   setNewFolderParent: (parent: string | null) => set({ newFolderParent: parent }),
 
@@ -788,10 +821,13 @@ export const useStore = create<Store>((set, get) => ({
     const nextDocs = { ...docs };
     delete nextDocs[path];
     if (doc) nextDocs[newPath] = { ...doc, path: newPath, missing: false };
+    const recent = get().recent.map((p) => (p === path ? newPath : p));
+    saveRecent(recent);
     set({
       tabs: tabs.map((t) => (t === path ? newPath : t)),
       docs: nextDocs,
       activePath: activePath === path ? newPath : activePath,
+      recent,
     });
     await get().refreshFiles();
     persistSession({ ...get() });
@@ -811,6 +847,9 @@ export const useStore = create<Store>((set, get) => ({
       set({ docs: { ...get().docs, [path]: { ...doc, dirty: false } } });
     }
     if (get().tabs.includes(path)) get().closeTab(path);
+    const recent = get().recent.filter((p) => p !== path);
+    saveRecent(recent);
+    set({ recent });
     await fsApi.deleteFile(path);
     await get().refreshFiles();
     get().scheduleSync();

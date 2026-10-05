@@ -288,3 +288,36 @@ describe("tekststørrelse", () => {
     expect(useStore.getState().zoom).toBe(0.7);
   });
 });
+
+describe("senest åbnede noter", () => {
+  it("nyeste først, højst fem, følger omdøb og sletning og huskes", async () => {
+    const files: Record<string, string> = {};
+    for (const n of ["1", "2", "3", "4", "5", "6"]) files[`N${n}.md`] = `# ${n}\n`;
+    await setup(files);
+    for (const n of ["1", "2", "3", "4", "5", "6", "2"]) await useStore.getState().openFile(`${ROOT}/N${n}.md`);
+    expect(useStore.getState().recent).toEqual(["N2", "N6", "N5", "N4", "N3"].map((n) => `${ROOT}/${n}.md`));
+    await useStore.getState().renameNote(`${ROOT}/N6.md`, "Seks");
+    expect(useStore.getState().recent[1]).toBe(`${ROOT}/Seks.md`);
+    await useStore.getState().removeNote(`${ROOT}/N5.md`);
+    expect(useStore.getState().recent).not.toContain(`${ROOT}/N5.md`);
+    expect(JSON.parse(localStorage.getItem("mw.recent") ?? "[]")).toEqual(useStore.getState().recent);
+  });
+});
+
+describe("ny note", () => {
+  it("foreslår Indbakke, men en valgt mappe (også roden) vinder", async () => {
+    await setup({ "A.md": A_V0, "Indbakke/Gammel.md": "x\n", "Arbejde/B.md": "y\n" });
+    useStore.getState().setNewNoteOpen(true);
+    expect(useStore.getState().newNoteDir).toBe("Indbakke");
+    useStore.getState().setNewNoteOpen(true, "Arbejde");
+    expect(useStore.getState().newNoteDir).toBe("Arbejde");
+    useStore.getState().setNewNoteOpen(true, "");
+    expect(useStore.getState().newNoteDir).toBe("");
+  });
+
+  it("uden Indbakke-mappe lander den i roden", async () => {
+    await setup();
+    useStore.getState().setNewNoteOpen(true);
+    expect(useStore.getState().newNoteDir).toBe("");
+  });
+});
